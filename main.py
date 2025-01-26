@@ -9,6 +9,29 @@ import matplotlib.pyplot as plt
 image_1 = r"C:\Users\TEST\Documents\GitHub\Magion24.2\image1.jpg"
 image_2 = r"C:\Users\TEST\Documents\GitHub\Magion24.2\image2.jpg"
 
+'''
+#vytvoreni slozky pro ukladani fotek
+folder_name = 'photos'
+if not os.path.exists(folder_name):
+    os.makedirs(folder_name)
+
+
+# Inicializace kamery a nastavení režimu infračerveného snímání
+camera = PiCamera()
+camera.resolution = (640, 480)
+camera.framerate = 1
+camera.sensor_mode = 3
+camera.exposure_mode = 'off'
+camera.awb_mode = 'off'
+camera.awb_gains = (1.5, 1.5)
+
+# Hlavní smyčka programu
+for i in range(3 * 60 * 60):
+    # Získání snímku z kamery a převod do formátu numpy array
+    image = np.empty((480, 640, 3), dtype=np.uint8)
+    camera.capture(image, 'rgb')
+'''
+
 
 def get_time(image):
     with open(image, 'rb') as image_file:
