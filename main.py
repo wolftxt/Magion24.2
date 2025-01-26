@@ -6,8 +6,8 @@ import cv2
 
 import matplotlib.pyplot as plt
 
-image_1 = "photos/53237611747_e867401f4a_o.jpg"
-image_2 = "photos/53238778483_d3c010a62c_o.jpg"
+image_1 = r"C:\Users\TEST\Documents\GitHub\Magion24.2\image1.jpg"
+image_2 = r"C:\Users\TEST\Documents\GitHub\Magion24.2\image2.jpg"
 
 
 def get_time(image):
@@ -94,7 +94,7 @@ image_1_cv, image_2_cv = convert_to_cv(image_1, image_2) # Create OpenCV image o
 keypoints_1, keypoints_2, descriptors_1, descriptors_2 = calculate_features(image_1_cv, image_2_cv, 1000) # Get keypoints and descriptors
 matches = calculate_matches(descriptors_1, descriptors_2) # Match descriptors
 
-#display_matches(image_1_cv, keypoints_1, image_2_cv, keypoints_2, matches)
+display_matches(image_1_cv, keypoints_1, image_2_cv, keypoints_2, matches)
 
 coordinates_1, coordinates_2 = find_matching_coordinates(keypoints_1, keypoints_2, matches)
 average_feature_distance = calculate_mean_distance(coordinates_1, coordinates_2)
