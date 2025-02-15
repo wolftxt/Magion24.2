@@ -129,3 +129,18 @@ speed = calculate_speed_in_kmps(average_feature_distance, GSD, time_difference)
 print(speed)
 plt.hist(get_distances(coordinates_1, coordinates_2), bins=64)
 plt.show()
+
+
+# jeste dokoncit vypocet rychlosti pomoci to norm metody 
+# pridat SPICE DATA 
+# vypocet pomoci souradnic
+# vypocet pomoci newtonova zakona
+# pridat celkovy prumer rychlosti
+# ukladani do vytvoreneho noveho souboru (jak se ma jmenovat, protoze main je soubor kodu)
+# ukladani fotografii do slozky (taky nevim jak se ma jmenovat a zda je to libovolne)
+# 
+#  \(o_o)/ 
+#   |___|   
+#  /_____\
+#    | |
+#
