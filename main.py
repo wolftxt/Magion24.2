@@ -139,8 +139,20 @@ plt.show()
 # ukladani do vytvoreneho noveho souboru (jak se ma jmenovat, protoze main je soubor kodu)
 # ukladani fotografii do slozky (taky nevim jak se ma jmenovat a zda je to libovolne)
 # 
+#    www
 #  \(o_o)/ 
 #   |___|   
 #  /_____\
 #    | |
-#
+
+#    www
+#  \(o_o)/
+#   |___|
+#  /_____\
+#    | |
+
+#    www
+#  \(o_o)/
+#   |___|
+#  /_____\
+#    | |
