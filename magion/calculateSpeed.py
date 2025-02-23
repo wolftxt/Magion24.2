@@ -65,9 +65,16 @@ def get_distances(coordinates_1, coordinates_2):
     return distances
 
 
+# Filters out all values that aren't within 10% of the median and returns the average of the rest.
 def calculate_mean_distance(coordinates_1, coordinates_2):
     dists = get_distances(coordinates_1, coordinates_2)
-    return sum(dists) / len(dists)
+    dists.sort()
+    median = dists[len(dists) // 2]
+    new_dists = []
+    for dist in dists:
+        if median * 0.9 < dist < median * 1.1:
+            new_dists.append(dist)
+    return sum(new_dists) / len(new_dists)
 
 
 def calculate_speed_in_kmps(feature_distance, GSD, time_difference):
@@ -77,18 +84,14 @@ def calculate_speed_in_kmps(feature_distance, GSD, time_difference):
 
 
 def calculate(image_1, image_2):
-    time_difference = get_time_difference(
-        image_1, image_2
-    )  # Get time difference between images
+    time_difference = get_time_difference(image_1, image_2)
     global image_1_cv
     global image_2_cv
-    image_1_cv, image_2_cv = convert_to_cv(
-        image_1, image_2
-    )  # Create OpenCV image objects
+    image_1_cv, image_2_cv = convert_to_cv(image_1, image_2)
     keypoints_1, keypoints_2, descriptors_1, descriptors_2 = calculate_features(
         image_1_cv, image_2_cv, 1000
-    )  # Get keypoints and descriptors
-    matches = calculate_matches(descriptors_1, descriptors_2)  # Match descriptors
+    )
+    matches = calculate_matches(descriptors_1, descriptors_2)
 
     coordinates_1, coordinates_2 = find_matching_coordinates(
         keypoints_1, keypoints_2, matches
@@ -97,5 +100,6 @@ def calculate(image_1, image_2):
 
     GSD = 12648
     GSD = 10648
+    GSD = 30332
     speed = calculate_speed_in_kmps(average_feature_distance, GSD, time_difference)
     return speed
