@@ -1,22 +1,34 @@
+#>3mb, 10min, main.py, vygenerovat result.txt (5 cifer), 250mb, 42 photo
 import math
 from datetime import datetime
-
 from exif import Image
 import cv2
 
 import matplotlib.pyplot as plt
 
+# jen pridavam to co jsem v kodu pouzivala predtim jak napad :D
+
+from time import sleep
+
+#vubec nevim jak importovat knihovnu pro kameru !!!!!!!!!
+from picamzero import Camera
+#from picamera import PiCamera
+#import numpy as np
+#import os
+
 image_1 = r"C:\Users\TEST\Documents\GitHub\Magion24.2\image1.jpg"
 image_2 = r"C:\Users\TEST\Documents\GitHub\Magion24.2\image2.jpg"
 
 '''
+#jeste je potreba prejmenovat slozku ale idk jak se ma jmenovat
 #vytvoreni slozky pro ukladani fotek
 folder_name = 'photos'
 if not os.path.exists(folder_name):
     os.makedirs(folder_name)
 
 
-# Inicializace kamery a nastavení režimu infračerveného snímání
+# Inicializace kamery
+# v teto casti je i nastaveni infrared snimani ale nevim jak a kde se to prrepina :D
 camera = PiCamera()
 camera.resolution = (640, 480)
 camera.framerate = 1
@@ -26,12 +38,32 @@ camera.awb_mode = 'off'
 camera.awb_gains = (1.5, 1.5)
 
 # Hlavní smyčka programu
+# predelat snimkovani tak aby to casove vychazelo !!!!!!!!!!!!!!!!!!!!!!!
 for i in range(3 * 60 * 60):
     # Získání snímku z kamery a převod do formátu numpy array
+    #idk jestli je to spravny format !!!!!!!!!!
+
     image = np.empty((480, 640, 3), dtype=np.uint8)
     camera.capture(image, 'rgb')
+
+#nevim jestli toto chceme ale hodim to sem taky :D
+    # Detekce noci a oblačnosti pomocí jednoduchých pravidel
+    is_night = np.mean(image) < 50
+    is_cloudy = np.mean(image[:, :, 1]) < 50
+
+    # Uložení snímku, pokud nebylo detekováno noční nebo zatažené počasí
+    if not is_night and not is_cloudy:
+        filename = f'{folder_name}/ndvi_{i:06}.jpg'
+        ndvi_image = (ndvi_image * 255).astype(np.uint8)
+        camera.annotate_text = filename
+        camera.capture(filename, format='jpeg', quality=90, thumbnail=None)  
 '''
 
+# Pauza mezi snímky
+sleep(1)
+
+# Ukončení kamery
+#camera.close()
 
 def get_time(image):
     with open(image, 'rb') as image_file:
@@ -54,7 +86,7 @@ def convert_to_cv(image_1, image_2):
     return image_1_cv, image_2_cv
 
 
-def calculate_features(image_1, image_2, feature_number):
+def calculate_features(image_1_cv, image_2_cv, feature_number):
     orb = cv2.ORB_create(nfeatures = feature_number)
     keypoints_1, descriptors_1 = orb.detectAndCompute(image_1_cv, None)
     keypoints_2, descriptors_2 = orb.detectAndCompute(image_2_cv, None)
@@ -129,3 +161,28 @@ speed = calculate_speed_in_kmps(average_feature_distance, GSD, time_difference)
 print(speed)
 plt.hist(get_distances(coordinates_1, coordinates_2), bins=64)
 plt.show()
+
+
+# jeste dokoncit vypocet rychlosti pomoci to norm metody 
+# vypocet pomoci newtonova zakona
+# pridat celkovy prumer rychlosti
+# ukladani do vytvoreneho noveho souboru (jak se ma jmenovat, protoze main je soubor kodu)
+# ukladani fotografii do slozky (taky nevim jak se ma jmenovat a zda je to libovolne)
+# 
+#    www
+#  \(o_o)/ 
+#   |___|       Lenča
+#  /_____\
+#    | |
+
+#    www
+#  \(o_o)/
+#   |___|        Davča
+#   |___|
+#    | |
+
+#    www
+#  \(o_o)/
+#   |___|        Peťka
+#  /_____\
+#    | |
