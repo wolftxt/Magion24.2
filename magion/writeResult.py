@@ -1,6 +1,7 @@
 from pathlib import Path
 
 
+# Writes the final result.txt file with precision to 4 decimal places.
 def write_result(speed):
     base_folder = Path(__file__).parent.resolve()
 
