@@ -1,17 +1,17 @@
+#>3mb, 10min, main.py, vygenerovat result.txt (5 cifer), 250mb, 42 photo
 import math
 from datetime import datetime
-
 from exif import Image
 import cv2
 
 import matplotlib.pyplot as plt
 
-#jen pridavam to co jsem v kodu pouzivala predtim jak napad :D
+# jen pridavam to co jsem v kodu pouzivala predtim jak napad :D
 
 from time import sleep
 
-#vubec nevim jak importovat knihovnu pro kameru !!!!!!!!!§
-#from picamzero import Camera
+#vubec nevim jak importovat knihovnu pro kameru !!!!!!!!!
+from picamzero import Camera
 #from picamera import PiCamera
 #import numpy as np
 #import os
@@ -164,8 +164,6 @@ plt.show()
 
 
 # jeste dokoncit vypocet rychlosti pomoci to norm metody 
-# pridat SPICE DATA 
-# vypocet pomoci souradnic
 # vypocet pomoci newtonova zakona
 # pridat celkovy prumer rychlosti
 # ukladani do vytvoreneho noveho souboru (jak se ma jmenovat, protoze main je soubor kodu)
