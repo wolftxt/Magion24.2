@@ -89,7 +89,7 @@ def calculate(image_1, image_2):
     global image_2_cv
     image_1_cv, image_2_cv = convert_to_cv(image_1, image_2)
     keypoints_1, keypoints_2, descriptors_1, descriptors_2 = calculate_features(
-        image_1_cv, image_2_cv, 1000
+        image_1_cv, image_2_cv, 2000
     )
     matches = calculate_matches(descriptors_1, descriptors_2)
 
@@ -97,9 +97,6 @@ def calculate(image_1, image_2):
         keypoints_1, keypoints_2, matches
     )
     average_feature_distance = calculate_mean_distance(coordinates_1, coordinates_2)
-
-    GSD = 12648
     GSD = 10648
-    GSD = 30332
     speed = calculate_speed_in_kmps(average_feature_distance, GSD, time_difference)
     return speed
