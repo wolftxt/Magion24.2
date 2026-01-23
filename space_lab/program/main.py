@@ -2,7 +2,7 @@ from picamzero import Camera
 import time
 
 from writeResult import write_result
-from calculateSpeed import calculate
+from space_lab.program.calculateSpeed import calculate
 
 TIME_INTERVAL = 13
 IMAGE_COUNT = 42
