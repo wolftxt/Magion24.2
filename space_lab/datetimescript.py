@@ -45,7 +45,7 @@ else:
             continue
 
         # 3. Extract timestamps
-        timestamps = [get_image_datetime(f) for f in image_files]
+        timestamps = sorted([get_image_datetime(f) for f in image_files])
 
         # 4. Calculate deltas
         deltas = []
