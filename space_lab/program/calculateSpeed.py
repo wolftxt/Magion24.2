@@ -30,15 +30,11 @@ def convert_to_cv(image_1, image_2):
 def calculate_features(image_1, image_2, feature_number):
     orb = cv2.ORB_create(nfeatures=feature_number)
 
-    # Create a black mask the same size as your image
     mask = np.zeros(image_1.shape, dtype=np.uint8)
 
-    # Draw a white circle in the middle (where the ground is)
-    # We use 40% of the height as the radius to stay away from the window edges
     height, width = image_1.shape
     cv2.circle(mask, (width // 2, height // 2), int(height * 0.4), 255, -1)
 
-    # Tell ORB to ONLY look inside that white circle
     keypoints_1, descriptors_1 = orb.detectAndCompute(image_1, mask)
     keypoints_2, descriptors_2 = orb.detectAndCompute(image_2, mask)
 
@@ -46,21 +42,49 @@ def calculate_features(image_1, image_2, feature_number):
 
 
 def calculate_matches(descriptors_1, descriptors_2):
-    # Use Brute Force but turn off crossCheck to allow knnMatch
     bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
 
-    # Find the 2 best matches for every point
     raw_matches = bf.knnMatch(descriptors_1, descriptors_2, k=2)
 
     good_matches = []
     for m, n in raw_matches:
-        # Lowe's Ratio Test: is the best match much better than the second best?
         if m.distance < 0.80 * n.distance:
             good_matches.append(m)
 
-    # Sort them so the very best ones are at the top
     good_matches = sorted(good_matches, key=lambda x: x.distance)
     return good_matches
+
+
+def filter_parallel_matches(keypoints_1, keypoints_2, matches):
+    if len(matches) < 2:
+        return matches
+
+    vectors = []
+    for m in matches:
+        pt1 = keypoints_1[m.queryIdx].pt
+        pt2 = keypoints_2[m.trainIdx].pt
+        dx = pt2[0] - pt1[0]
+        dy = pt2[1] - pt1[1]
+        distance = math.hypot(dx, dy)
+        angle = math.atan2(dy, dx)
+        vectors.append((m, dx, dy, distance, angle))
+
+    distances = [v[3] for v in vectors]
+    angles = [v[4] for v in vectors]
+
+    median_distance = np.median(distances)
+    median_angle = np.median(angles)
+
+    distance_threshold = median_distance * 0.3
+    angle_threshold = 0.2
+
+    filtered_matches = []
+    for v in vectors:
+        match, dx, dy, distance, angle = v
+        if abs(distance - median_distance) < distance_threshold and abs(angle - median_angle) < angle_threshold:
+            filtered_matches.append(match)
+
+    return filtered_matches
 
 
 def find_matching_coordinates(keypoints_1, keypoints_2, matches):
@@ -108,6 +132,7 @@ def calculate(image_1, image_2):
         image_1_cv, image_2_cv, 2000
     )
     matches = calculate_matches(descriptors_1, descriptors_2)
+    matches = filter_parallel_matches(keypoints_1, keypoints_2, matches)
 
     coordinates_1, coordinates_2 = find_matching_coordinates(
         keypoints_1, keypoints_2, matches
@@ -123,21 +148,17 @@ def calculate(image_1, image_2):
     output_visual = np.zeros((max(h1, h2), w1 + w2), dtype=np.uint8)
     output_visual[:h1, :w1] = image_1_cv
     output_visual[:h2, w1:w1 + w2] = image_2_cv
-    output_visual = cv2.cvtColor(output_visual, cv2.COLOR_GRAY2BGR)  # Convert to color to draw colored lines
+    output_visual = cv2.cvtColor(output_visual, cv2.COLOR_GRAY2BGR)
 
-    # 2. Manually draw thick lines for the top 50 matches
     for m in matches[:100]:
-        # Get the coordinates
         pt1 = (int(keypoints_1[m.queryIdx].pt[0]), int(keypoints_1[m.queryIdx].pt[1]))
         pt2 = (int(keypoints_2[m.trainIdx].pt[0] + w1), int(keypoints_2[m.trainIdx].pt[1]))
 
-        # Draw the line with thickness=3
         cv2.line(output_visual, pt1, pt2, (0, 255, 0), 3)
-        # Draw a circle at the joints
         cv2.circle(output_visual, pt1, 5, (0, 0, 255), -1)
         cv2.circle(output_visual, pt2, 5, (0, 0, 255), -1)
-    #if speed < 4 or speed > 9:
-    #cv2.imshow("Feature Matches", output_visual)
-    #cv2.waitKey(0)  # This keeps the window open until you press a key
-    #cv2.destroyAllWindows()
+    if speed < 4 or speed > 9:
+        cv2.imshow("Feature Matches", output_visual)
+        cv2.waitKey(0)  # This keeps the window open until you press a key
+        cv2.destroyAllWindows()
     return speed
