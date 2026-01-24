@@ -85,9 +85,18 @@ def calculate_mean_distance(coordinates_1, coordinates_2):
 
 
 def calculate_speed_in_kmps(feature_distance, GSD, time_difference):
-    distance = feature_distance * GSD / 100000
-    speed = distance / time_difference
-    return speed
+    ground_distance_m = (feature_distance * GSD) / 100
+
+    EARTH_RADIUS = 6371000
+    ISS_ALTITUDE = 420000
+
+    scale_factor = (EARTH_RADIUS + ISS_ALTITUDE) / EARTH_RADIUS
+
+    orbital_distance_m = ground_distance_m * scale_factor
+
+    speed_kmps = (orbital_distance_m / time_difference) / 1000
+
+    return speed_kmps
 
 
 def calculate(image_1, image_2):
