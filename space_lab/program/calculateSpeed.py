@@ -43,13 +43,15 @@ def calculate_features(image_1, image_2, feature_number):
 
 def calculate_matches(descriptors_1, descriptors_2):
     bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
-
     raw_matches = bf.knnMatch(descriptors_1, descriptors_2, k=2)
 
     good_matches = []
-    for m, n in raw_matches:
-        if m.distance < 0.80 * n.distance:
-            good_matches.append(m)
+    for match in raw_matches:
+        # Check if we actually found two matches for this descriptor
+        if len(match) == 2:
+            m, n = match
+            if m.distance < 0.80 * n.distance:
+                good_matches.append(m)
 
     good_matches = sorted(good_matches, key=lambda x: x.distance)
     return good_matches
@@ -104,6 +106,10 @@ def calculate(image_1, image_2):
     img1_cv, img2_cv = convert_to_cv(image_1, image_2)
 
     keypoints_1, keypoints_2, descriptors_1, descriptors_2 = calculate_features(img1_cv, img2_cv, 2000)
+
+    if descriptors_1 is None or descriptors_2 is None:
+        return -1, 0
+
     matches = calculate_matches(descriptors_1, descriptors_2)
 
     if len(matches) < 10:
