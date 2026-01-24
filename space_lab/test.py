@@ -14,6 +14,12 @@ except ImportError:
 
 PARENT_IMAGE_DIR = BASE_DIR / "images"
 
+def get_time_difference(image_1, image_2):
+    time_1 = get_time(image_1)
+    time_2 = get_time(image_2)
+    time_difference = time_2 - time_1
+    return time_difference.seconds
+
 
 def main():
     if not os.path.exists(PARENT_IMAGE_DIR):
@@ -40,7 +46,13 @@ def main():
         for i in range(len(image_files) - 1):
             img1 = image_files[i]
             img2 = image_files[i + 1]
-            speed, inliers = calculate(img1, img2)
+            time_difference = get_time_difference(img1, img2)
+            try:
+                speed, inliers = calculate(img1, img2, time_difference)
+            except:
+                speed = -1
+                inliers = 0
+
             if speed != -1:
                 results.append({
                     "name": os.path.basename(img2),

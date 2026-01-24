@@ -13,14 +13,6 @@ def get_time(image):
         time = datetime.strptime(time_str, "%Y:%m:%d %H:%M:%S")
     return time
 
-
-def get_time_difference(image_1, image_2):
-    time_1 = get_time(image_1)
-    time_2 = get_time(image_2)
-    time_difference = time_2 - time_1
-    return time_difference.seconds
-
-
 def convert_to_cv(image_1, image_2):
     image_1_cv = cv2.imread(image_1, 0)
     image_2_cv = cv2.imread(image_2, 0)
@@ -101,19 +93,12 @@ def calculate_speed_in_kmps(feature_distance, GSD, time_difference):
     return speed_kmps
 
 
-def calculate(image_1, image_2):
-    time_difference = get_time_difference(image_1, image_2)
+def calculate(image_1, image_2, time_difference):
     img1_cv, img2_cv = convert_to_cv(image_1, image_2)
 
     keypoints_1, keypoints_2, descriptors_1, descriptors_2 = calculate_features(img1_cv, img2_cv, 2000)
 
-    if descriptors_1 is None or descriptors_2 is None:
-        return -1, 0
-
     matches = calculate_matches(descriptors_1, descriptors_2)
-
-    if len(matches) < 10:
-        return -1, 0  # Return 0 inliers if failed
 
     # Apply RANSAC
     src_pts = np.float32([keypoints_1[m.queryIdx].pt for m in matches]).reshape(-1, 1, 2)
@@ -121,9 +106,6 @@ def calculate(image_1, image_2):
 
     # M is the matrix, mask identifies inliers
     M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
-
-    if mask is None:
-        return -1, 0
 
     inliers_count = np.sum(mask)
     matches_mask = mask.flatten().tolist()
