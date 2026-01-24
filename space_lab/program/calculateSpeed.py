@@ -21,14 +21,44 @@ def convert_to_cv(image_1, image_2):
 
 def calculate_features(image_1, image_2, feature_number):
     orb = cv2.ORB_create(nfeatures=feature_number)
-
-    mask = np.zeros(image_1.shape, dtype=np.uint8)
-
     height, width = image_1.shape
-    cv2.circle(mask, (width // 2, height // 2), int(height * 0.4), 255, -1)
 
-    keypoints_1, descriptors_1 = orb.detectAndCompute(image_1, mask)
-    keypoints_2, descriptors_2 = orb.detectAndCompute(image_2, mask)
+    mask = None
+
+    # Check corners to see if we need a mask (Threshold 15 for noise)
+    corners = [image_1[0, 0], image_1[0, width - 1],
+               image_1[height - 1, 0], image_1[height - 1, width - 1]]
+
+    if all(pixel < 15 for pixel in corners):
+        # 1. Create a binary version of the image:
+        # Anything not black becomes white (255)
+        _, thresh = cv2.threshold(image_1, 15, 255, cv2.THRESH_BINARY)
+
+        # 2. Find the bounding box of all white pixels
+        # This locates the 'porthole' regardless of what's inside it
+        coords = cv2.findNonZero(thresh)
+        if coords is not None:
+            x, y, w, h = cv2.boundingRect(coords)
+
+            # 3. Calculate center and radius based on the bounding box
+            center_x = x + w // 2
+            center_y = y + h // 2
+            # Use the smaller dimension to ensure the circle stays inside the box
+            radius = int(min(w, h) / 2 * 0.95)
+
+            # 4. Final check: Only create mask if radius is valid
+            if radius > 10:
+                mask = np.zeros((height, width), dtype=np.uint8)
+                cv2.circle(mask, (center_x, center_y), radius, 255, -1)
+
+    # 5. EXECUTION: If mask is invalid/too small, orb will just use the whole image
+    try:
+        keypoints_1, descriptors_1 = orb.detectAndCompute(image_1, mask)
+        keypoints_2, descriptors_2 = orb.detectAndCompute(image_2, mask)
+    except Exception as e:
+        print(f"Mask error, falling back to full image: {e}")
+        keypoints_1, descriptors_1 = orb.detectAndCompute(image_1, None)
+        keypoints_2, descriptors_2 = orb.detectAndCompute(image_2, None)
 
     return keypoints_1, keypoints_2, descriptors_1, descriptors_2
 
