@@ -98,8 +98,8 @@ def get_distances(coordinates_1, coordinates_2):
     for coordinate in merged_coordinates:
         x_difference = coordinate[0][0] - coordinate[1][0]
         y_difference = coordinate[0][1] - coordinate[1][1]
-        distance = math.hypot(x_difference, y_difference)
-        distances.append(distance)
+        dist = math.hypot(x_difference, y_difference)
+        distances.append(dist)
     return distances
 
 
@@ -123,7 +123,7 @@ def calculate_speed_in_kmps(feature_distance, GSD, time_difference):
     return speed_kmps
 
 
-def calculate(image_1, image_2, time_difference):
+def calculate(image_1, image_2, time_difference, height):
     img1_cv, img2_cv = convert_to_cv(image_1, image_2)
 
     keypoints_1, keypoints_2, descriptors_1, descriptors_2 = calculate_features(img1_cv, img2_cv, 2000)
@@ -145,7 +145,10 @@ def calculate(image_1, image_2, time_difference):
     coordinates_1, coordinates_2 = find_matching_coordinates(keypoints_1, keypoints_2, ransac_matches)
     average_feature_distance = calculate_mean_distance(coordinates_1, coordinates_2)
 
-    GSD = 13020
+    image_width_px = 4056  # Image width in pixels
+    focal_length_mm = 5.0  # Focal length (F) in mm
+    sensor_width_mm = 6.287  # Sensor width (Sw) in mm
+    GSD = (height * sensor_width_mm) / (focal_length_mm * image_width_px)
     speed = calculate_speed_in_kmps(average_feature_distance, GSD, time_difference)
 
     return speed, inliers_count

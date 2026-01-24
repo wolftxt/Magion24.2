@@ -1,6 +1,7 @@
 from picamzero import Camera
+from astro_pi_orbit import ISS
 import time
-import os
+
 
 from writeResult import write_result
 from calculateSpeed import calculate
@@ -43,7 +44,8 @@ def capture_images():
 
             calc_start = time.time()
             try:
-                speed, inliers = calculate(img1, img2, time_diff)
+                height = ISS().coordinates().elevation.cm
+                speed, inliers = calculate(img1, img2, time_diff, height)
                 calc_end = time.time()
 
                 results.append({

@@ -25,8 +25,8 @@ def get_time_difference(image_1, image_2):
 def main():
     if not os.path.exists(PARENT_IMAGE_DIR):
         return
-
-    subfolders = sorted([f.path for f in os.scandir(PARENT_IMAGE_DIR) if f.is_dir()])
+    highlights_path = PARENT_IMAGE_DIR / "arthur3"
+    subfolders = sorted([str(highlights_path)])
 
     # --- New: List to store the average speed of each subfolder ---
     all_subfolder_averages = []
@@ -52,7 +52,7 @@ def main():
             img2 = image_files[i + 1]
             time_difference = get_time_difference(img1, img2)
             try:
-                speed, inliers = calculate(img1, img2, time_difference)
+                speed, inliers = calculate(img1, img2, time_difference, 400000)
             except:
                 speed = -1
                 inliers = 0
