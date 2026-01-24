@@ -14,6 +14,7 @@ except ImportError:
 
 PARENT_IMAGE_DIR = BASE_DIR / "images"
 
+
 def get_time_difference(image_1, image_2):
     time_1 = get_time(image_1)
     time_2 = get_time(image_2)
@@ -26,6 +27,9 @@ def main():
         return
 
     subfolders = sorted([f.path for f in os.scandir(PARENT_IMAGE_DIR) if f.is_dir()])
+
+    # --- New: List to store the average speed of each subfolder ---
+    all_subfolder_averages = []
 
     for image_dir in subfolders:
         folder_name = os.path.basename(image_dir)
@@ -67,18 +71,28 @@ def main():
         print(f"{'Image Name':<30} | {'Speed (km/s)':<15} | {'Inliers'}")
         print("-" * 60)
 
-        final_speeds = []
+        folder_speeds = []
         for res in best_results:
             print(f"{res['name']:<30} | {res['speed']:.4f} km/s   | {res['confidence']}")
-            final_speeds.append(res["speed"])
+            folder_speeds.append(res["speed"])
 
-        if final_speeds:
-            avg_speed = sum(final_speeds) / len(final_speeds)
+        if folder_speeds:
+            folder_avg = sum(folder_speeds) / len(folder_speeds)
             print("-" * 60)
-            print(f"Final Filtered Average Speed for {folder_name}: {avg_speed:.4f} km/s")
+            print(f"Final Filtered Average Speed for {folder_name}: {folder_avg:.4f} km/s")
+
+            # --- New: Add this folder's average to our grand total list ---
+            all_subfolder_averages.append(folder_avg)
         else:
             print("No valid matches found.")
         print("=" * 60)
+
+    # --- New: Calculate and display the final grand average ---
+    if all_subfolder_averages:
+        grand_average = sum(all_subfolder_averages) / len(all_subfolder_averages)
+        print("\n" + "#" * 60)
+        print(f"GRAND TOTAL AVERAGE SPEED ACROSS ALL FOLDERS: {grand_average:.4f} km/s")
+        print("#" * 60)
 
 
 if __name__ == "__main__":
