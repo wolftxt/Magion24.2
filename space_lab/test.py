@@ -1,31 +1,41 @@
+from datetime import datetime
+
+from exif import Image
 import os
 import sys
 from glob import glob
 from pathlib import Path
+
 
 BASE_DIR = Path(__file__).resolve().parent
 program_path = BASE_DIR / "program"
 sys.path.append(str(program_path))
 
 try:
-    from calculateSpeed import calculate, get_time
+    from calculateSpeed import calculate
 except ImportError:
     sys.exit(1)
 
 PARENT_IMAGE_DIR = BASE_DIR / "images"
 
+def get_time(image):
+    with open(image, "rb") as image_file:
+        img = Image(image_file)
+        time_str = img.get("datetime_original")
+        time = datetime.strptime(time_str, "%Y:%m:%d %H:%M:%S")
+    return time
 
 def get_time_difference(image_1, image_2):
     time_1 = get_time(image_1)
     time_2 = get_time(image_2)
     time_difference = time_2 - time_1
-    return time_difference.seconds
+    return time_difference.total_seconds()
 
 
 def main():
     if not os.path.exists(PARENT_IMAGE_DIR):
         return
-    highlights_path = PARENT_IMAGE_DIR / "arthur3"
+    highlights_path = PARENT_IMAGE_DIR / "astur3"
     subfolders = sorted([str(highlights_path)])
 
     # --- New: List to store the average speed of each subfolder ---
@@ -52,11 +62,11 @@ def main():
             img2 = image_files[i + 1]
             time_difference = get_time_difference(img1, img2)
             try:
-                speed, inliers = calculate(img1, img2, time_difference, 400000)
-            except:
+                speed, inliers = calculate(img1, img2, time_difference, 420000)
+            except Exception as e:
+                print(e)
                 speed = -1
                 inliers = 0
-
             if speed != -1:
                 results.append({
                     "name": os.path.basename(img2),

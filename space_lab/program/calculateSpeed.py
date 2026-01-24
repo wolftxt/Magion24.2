@@ -151,4 +151,5 @@ def calculate(image_1, image_2, time_difference, height):
     GSD = (height * sensor_width_mm) / (focal_length_mm * image_width_px)
     speed = calculate_speed_in_kmps(average_feature_distance, GSD, time_difference)
 
+    print(speed)
     return speed, inliers_count
