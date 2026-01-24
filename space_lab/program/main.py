@@ -6,7 +6,7 @@ from writeResult import write_result
 from calculateSpeed import calculate
 
 # Configuration
-TIME_INTERVAL = 2
+TIME_INTERVAL = 13
 IMAGE_COUNT = 42
 MAX_TIME_ELAPSED = 570  # 9.5 minutes
 
@@ -20,56 +20,61 @@ def capture_images():
     timestamps = []
 
     for i in range(IMAGE_COUNT):
-        # 1. Check for time limit
         if time.time() - start_time > MAX_TIME_ELAPSED:
+            print("Time limit reached. Breaking loop.")
             break
 
         cycle_start = time.time()
 
-        # 2. Capture image and record precise timestamp
+        # 1. Capture timing
         image_path = f"image{i}.jpg"
+        capture_start = time.time()
         cam.take_photo(image_path)
-        images.append(image_path)
-        timestamps.append(time.time())
+        capture_end = time.time()
 
-        # 3. If we have at least two images, calculate speed for the interval
+        images.append(image_path)
+        timestamps.append(capture_end)
+
+        # 2. Calculation timing
         if i > 0:
             img1 = images[i - 1]
             img2 = images[i]
-            # Time difference between the two actual capture moments
             time_diff = timestamps[i] - timestamps[i - 1]
 
+            calc_start = time.time()
             try:
-                # Expecting: speed, inliers = calculate(path1, path2, seconds)
                 speed, inliers = calculate(img1, img2, time_diff)
+                calc_end = time.time()
 
-                if speed != -1:
-                    results.append({
-                        "speed": speed,
-                        "confidence": inliers
-                    })
+                results.append({
+                    "speed": speed,
+                    "confidence": inliers
+                })
             except Exception as e:
                 print(f"Calculation error at index {i}: {e}")
 
-        # 4. Precise sleep to maintain interval
+        # 3. Sleep timing
         elapsed_in_cycle = time.time() - cycle_start
         sleep_time = max(0, TIME_INTERVAL - elapsed_in_cycle)
+
+        if elapsed_in_cycle > TIME_INTERVAL:
+            print(f"WARNING: Cycle {i} exceeded TIME_INTERVAL! Timing may be drifting.")
+
         time.sleep(sleep_time)
 
-    # --- Filtering Logic (The "Sorting System") ---
+    # --- Filtering Logic ---
     if not results:
+        print("No results collected.")
         return 0
 
-    # Sort by confidence (inliers) descending
     results.sort(key=lambda x: x["confidence"], reverse=True)
-
-    # Take the top 25% (minimum of 1)
     top_n = max(1, len(results) // 4)
     best_results = results[:top_n]
 
-    # Calculate final average speed
     final_speeds = [res["speed"] for res in best_results]
     avg_speed = sum(final_speeds) / len(final_speeds)
+
+    print(f"Final Average Speed: {avg_speed:.4f}")
 
     del cam
     return avg_speed
@@ -81,7 +86,6 @@ def main():
         write_result(speed)
     except Exception as e:
         print(f"Fatal error: {e}")
-        # Ensure we write something so the mission doesn't fail
         write_result(0)
 
 
