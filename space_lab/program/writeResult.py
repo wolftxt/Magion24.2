@@ -5,7 +5,7 @@ from pathlib import Path
 def write_result(speed):
     base_folder = Path(__file__).parent.resolve()
 
-    estimate_kmps_formatted = "{:.4f}".format(speed)
+    estimate_kmps_formatted = "{:.5g}".format(speed)
 
     output_string = estimate_kmps_formatted
 
