@@ -89,8 +89,14 @@ def calculate_mean_distance(coordinates_1, coordinates_2):
     count = len(coordinates_1)
 
     for i in range(count):
-        sum_dx += coordinates_2[i][0] - coordinates_1[i][0]
-        sum_dy += coordinates_2[i][1] - coordinates_1[i][1]
+        dx = coordinates_2[i][0] - coordinates_1[i][0]
+        dy = coordinates_2[i][1] - coordinates_1[i][1]
+        if math.fabs(dx) < 2 and math.fabs(dy) < 2:
+            print("Something went VERY WRONG, the distances are 0.")
+            count -= 1
+            continue
+        sum_dx += dx
+        sum_dy += dy 
 
     mean_dx = sum_dx / count
     mean_dy = sum_dy / count
