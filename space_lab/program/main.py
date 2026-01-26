@@ -44,7 +44,7 @@ def capture_images():
             calc_start = time.time()
             try:
                 iss_altitude = ISS().coordinates().elevation.m
-                speed, inliers = calculate(img1, img2, time_diff, iss_altitude)
+                speed, inliers = calculate(img1, img2, time_diff, iss_altitude, 0)
                 calc_end = time.time()
 
                 results.append({
