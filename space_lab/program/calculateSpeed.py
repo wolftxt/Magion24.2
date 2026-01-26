@@ -19,10 +19,10 @@ def calculate_features(image_1, image_2, feature_number):
     corners = [image_1[0, 0], image_1[0, width - 1],
                image_1[height - 1, 0], image_1[height - 1, width - 1]]
 
-    if all(pixel < 15 for pixel in corners):
+    if all(pixel < 40 for pixel in corners):
         # 1. Create a binary version of the image:
         # Anything not black becomes white (255)
-        _, thresh = cv2.threshold(image_1, 15, 255, cv2.THRESH_BINARY)
+        _, thresh = cv2.threshold(image_1, 80, 255, cv2.THRESH_BINARY)
 
         # 2. Find the bounding box of all white pixels
         # This locates the 'porthole' regardless of what's inside it
@@ -34,7 +34,7 @@ def calculate_features(image_1, image_2, feature_number):
             center_x = x + w // 2
             center_y = y + h // 2
             # Use the smaller dimension to ensure the circle stays inside the box
-            radius = int(min(w, h) / 2 * 0.95)
+            radius = int(min(w, h) / 2 * 0.9)
 
             # 4. Final check: Only create mask if radius is valid
             if radius > 10:
@@ -98,7 +98,7 @@ def calculate_mean_distance(coordinates_1, coordinates_2):
     return math.hypot(mean_dx, mean_dy)
 
 def calculate_speed_in_kmps(feature_distance, GSD, time_difference, iss_altitude):
-    ground_distance_m = (feature_distance * GSD) / 100
+    ground_distance_m = (feature_distance * GSD)
 
     earth_radius = 6371000
 
@@ -135,7 +135,7 @@ def calculate(image_1, image_2, time_difference, iss_altitude):
     image_width_px = 4056
     focal_length_mm = 5.0
     sensor_width_mm = 6.287
-    GSD = (iss_altitude * 100 * sensor_width_mm) / (focal_length_mm * image_width_px)
+    GSD = (iss_altitude * sensor_width_mm) / (focal_length_mm * image_width_px)
     speed = calculate_speed_in_kmps(average_feature_distance, GSD, time_difference, iss_altitude)
 
     print(f"speed: {speed:.4f} km/h, inliers: {inliers_count}")
