@@ -103,12 +103,19 @@ def calculate_mean_distance(coordinates_1, coordinates_2):
 
     return math.hypot(mean_dx, mean_dy)
 
-def calculate_speed_in_kmps(feature_distance, GSD, time_difference, iss_altitude):
-    ground_distance_m = (feature_distance * GSD)
+def calculate_speed_in_kmps(feature_distance, gsd, time_difference, iss_altitude, latitude):
+    inclination = math.radians(51.6)
+    lat_rad = math.radians(latitude)
+    d_r = 463.8 * math.cos(lat_rad)
+    cos_beta = math.cos(inclination) / math.cos(lat_rad)
+    cos_beta = min(1.0, max(-1.0, cos_beta))
+
+    d_g = (feature_distance * gsd)
+    d_g_and_r = math.sqrt(d_g ** 2 + d_r ** 2 + 2 * d_g * d_r * cos_beta)
 
     earth_radius = 6371000
 
-    angle = 2 * math.asin(ground_distance_m/earth_radius/2)
+    angle = 2 * math.asin(d_g_and_r/earth_radius/2)
 
     arc_distance = angle * (earth_radius + iss_altitude)
     speed_in_mps = arc_distance / time_difference
@@ -116,7 +123,7 @@ def calculate_speed_in_kmps(feature_distance, GSD, time_difference, iss_altitude
     return speed_in_mps / 1000
 
 
-def calculate(image_1, image_2, time_difference, iss_altitude):
+def calculate(image_1, image_2, time_difference, iss_altitude, latitude):
     img1_cv, img2_cv = convert_to_cv(image_1, image_2)
 
     keypoints_1, keypoints_2, descriptors_1, descriptors_2 = calculate_features(img1_cv, img2_cv, 1000)
@@ -142,7 +149,7 @@ def calculate(image_1, image_2, time_difference, iss_altitude):
     focal_length_mm = 5.0
     sensor_width_mm = 6.287
     GSD = (iss_altitude * sensor_width_mm) / (focal_length_mm * image_width_px)
-    speed = calculate_speed_in_kmps(average_feature_distance, GSD, time_difference, iss_altitude)
+    speed = calculate_speed_in_kmps(average_feature_distance, GSD, time_difference, iss_altitude, latitude)
 
     print(f"speed: {speed:.4f} km/h, inliers: {inliers_count}")
 
