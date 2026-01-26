@@ -68,7 +68,7 @@ def main():
             img2 = image_files[i + 1]
             time_difference = get_time_difference(img1, img2)
             try:
-                speed, inliers = calculate(img1, img2, time_difference, 42000000)
+                speed, inliers = calculate(img1, img2, time_difference, 420000) ## Height of ISS in m
             except Exception as e:
                 print(f"Error processing {os.path.basename(img2)}: {e}")
                 speed = -1

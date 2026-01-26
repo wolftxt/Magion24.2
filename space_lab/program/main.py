@@ -13,7 +13,6 @@ MAX_TIME_ELAPSED = 570  # 9.5 minutes
 
 start_time = time.time()
 
-
 def capture_images():
     cam = Camera()
     results = []
@@ -44,8 +43,8 @@ def capture_images():
 
             calc_start = time.time()
             try:
-                height = ISS().coordinates().elevation.m * 100
-                speed, inliers = calculate(img1, img2, time_diff, height)
+                iss_altitude = ISS().coordinates().elevation.m * 100
+                speed, inliers = calculate(img1, img2, time_diff, iss_altitude)
                 calc_end = time.time()
 
                 results.append({

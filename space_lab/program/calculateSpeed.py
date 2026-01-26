@@ -96,23 +96,20 @@ def calculate_mean_distance(coordinates_1, coordinates_2):
     dists = get_distances(coordinates_1, coordinates_2)
     return sum(dists) / len(dists)
 
-
-def calculate_speed_in_kmps(feature_distance, GSD, time_difference):
+def calculate_speed_in_kmps(feature_distance, GSD, time_difference, iss_altitude):
     ground_distance_m = (feature_distance * GSD) / 100
 
-    EARTH_RADIUS = 6371000
-    ISS_ALTITUDE = 420000
+    earth_radius = 6371000
 
-    scale_factor = (EARTH_RADIUS + ISS_ALTITUDE) / EARTH_RADIUS
+    angle = 2 * math.asin(ground_distance_m/earth_radius/2)
 
-    orbital_distance_m = ground_distance_m * scale_factor
+    arc_distance = angle * (earth_radius + iss_altitude)
+    speed_in_mps = arc_distance / time_difference
 
-    speed_kmps = (orbital_distance_m / time_difference) / 1000
-
-    return speed_kmps
+    return speed_in_mps / 1000
 
 
-def calculate(image_1, image_2, time_difference, height):
+def calculate(image_1, image_2, time_difference, iss_altitude):
     img1_cv, img2_cv = convert_to_cv(image_1, image_2)
 
     keypoints_1, keypoints_2, descriptors_1, descriptors_2 = calculate_features(img1_cv, img2_cv, 2000)
@@ -134,11 +131,11 @@ def calculate(image_1, image_2, time_difference, height):
     coordinates_1, coordinates_2 = find_matching_coordinates(keypoints_1, keypoints_2, ransac_matches)
     average_feature_distance = calculate_mean_distance(coordinates_1, coordinates_2)
 
-    image_width_px = 4056  # Image width in pixels
-    focal_length_mm = 5.0  # Focal length (F) in mm
-    sensor_width_mm = 6.287  # Sensor width (Sw) in mm
-    GSD = (height * sensor_width_mm) / (focal_length_mm * image_width_px)
-    speed = calculate_speed_in_kmps(average_feature_distance, GSD, time_difference)
+    image_width_px = 4056
+    focal_length_mm = 5.0
+    sensor_width_mm = 6.287
+    GSD = (iss_altitude * 100 * sensor_width_mm) / (focal_length_mm * image_width_px)
+    speed = calculate_speed_in_kmps(average_feature_distance, GSD, time_difference, iss_altitude)
 
     print(speed)
     return speed, inliers_count
