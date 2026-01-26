@@ -1,17 +1,7 @@
 import math
 import numpy as np
-from datetime import datetime
 
-from exif import Image
 import cv2
-
-
-def get_time(image):
-    with open(image, "rb") as image_file:
-        img = Image(image_file)
-        time_str = img.get("datetime_original")
-        time = datetime.strptime(time_str, "%Y:%m:%d %H:%M:%S")
-    return time
 
 def convert_to_cv(image_1, image_2):
     image_1_cv = cv2.imread(image_1, 0)
@@ -69,7 +59,6 @@ def calculate_matches(descriptors_1, descriptors_2):
 
     good_matches = []
     for match in raw_matches:
-        # Check if we actually found two matches for this descriptor
         if len(match) == 2:
             m, n = match
             if m.distance < 0.80 * n.distance:
