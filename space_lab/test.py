@@ -1,11 +1,10 @@
 from datetime import datetime
-
 from exif import Image
 import os
 import sys
 from glob import glob
 from pathlib import Path
-
+import statistics
 
 BASE_DIR = Path(__file__).resolve().parent
 program_path = BASE_DIR / "program"
@@ -18,12 +17,14 @@ except ImportError:
 
 PARENT_IMAGE_DIR = BASE_DIR / "images"
 
+
 def get_time(image):
     with open(image, "rb") as image_file:
         img = Image(image_file)
         time_str = img.get("datetime_original")
         time = datetime.strptime(time_str, "%Y:%m:%d %H:%M:%S")
     return time
+
 
 def get_time_difference(image_1, image_2):
     time_1 = get_time(image_1)
@@ -35,10 +36,15 @@ def get_time_difference(image_1, image_2):
 def main():
     if not os.path.exists(PARENT_IMAGE_DIR):
         return
-    highlights_path = PARENT_IMAGE_DIR / "astur3"
-    subfolders = sorted([str(highlights_path)])
 
-    # --- New: List to store the average speed of each subfolder ---
+    # Identify subfolders within the highlights path
+    # Using glob to find actual subdirectories if they exist
+    subfolders = sorted([str(f) for f in PARENT_IMAGE_DIR.iterdir() if f.is_dir()])
+
+    # Fallback if no subfolders exist and astur3 is the target itself
+    if not subfolders:
+        subfolders = [str(PARENT_IMAGE_DIR)]
+
     all_subfolder_averages = []
 
     for image_dir in subfolders:
@@ -62,11 +68,13 @@ def main():
             img2 = image_files[i + 1]
             time_difference = get_time_difference(img1, img2)
             try:
-                speed, inliers = calculate(img1, img2, time_difference, 420000)
+                # Assuming 42000000 is a constant required by your calculate function
+                speed, inliers = calculate(img1, img2, time_difference, 42000000)
             except Exception as e:
-                print(e)
+                print(f"Error processing {os.path.basename(img2)}: {e}")
                 speed = -1
                 inliers = 0
+
             if speed != -1:
                 results.append({
                     "name": os.path.basename(img2),
@@ -74,6 +82,7 @@ def main():
                     "confidence": inliers
                 })
 
+        # Filter for best results (top 25%)
         results.sort(key=lambda x: x["confidence"], reverse=True)
         top_n = max(1, len(results) // 4)
         best_results = results[:top_n]
@@ -90,18 +99,25 @@ def main():
             folder_avg = sum(folder_speeds) / len(folder_speeds)
             print("-" * 60)
             print(f"Final Filtered Average Speed for {folder_name}: {folder_avg:.4f} km/s")
-
-            # --- New: Add this folder's average to our grand total list ---
             all_subfolder_averages.append(folder_avg)
         else:
             print("No valid matches found.")
         print("=" * 60)
 
-    # --- New: Calculate and display the final grand average ---
-    if all_subfolder_averages:
-        grand_average = sum(all_subfolder_averages) / len(all_subfolder_averages)
+    # --- Final Calculations ---
+    if len(all_subfolder_averages) > 0:
+        grand_average = statistics.mean(all_subfolder_averages)
+
+        # Standard deviation requires at least two data points
+        if len(all_subfolder_averages) > 1:
+            stdev = statistics.stdev(all_subfolder_averages)
+        else:
+            stdev = 0.0
+
         print("\n" + "#" * 60)
-        print(f"GRAND TOTAL AVERAGE SPEED ACROSS ALL FOLDERS: {grand_average:.4f} km/s")
+        print(f"SUMMARY FOR ALL SUBFOLDERS:")
+        print(f"Grand Average Speed: {grand_average:.4f} km/s")
+        print(f"Standard Deviation:  {stdev:.4f} km/s")
         print("#" * 60)
 
 
