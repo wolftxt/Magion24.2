@@ -80,21 +80,22 @@ def find_matching_coordinates(keypoints_1, keypoints_2, matches):
     return coordinates_1, coordinates_2
 
 
-def get_distances(coordinates_1, coordinates_2):
-    all_distances = 0
-    merged_coordinates = list(zip(coordinates_1, coordinates_2))
-    distances = []
-    for coordinate in merged_coordinates:
-        x_difference = coordinate[0][0] - coordinate[1][0]
-        y_difference = coordinate[0][1] - coordinate[1][1]
-        dist = math.hypot(x_difference, y_difference)
-        distances.append(dist)
-    return distances
-
-
 def calculate_mean_distance(coordinates_1, coordinates_2):
-    dists = get_distances(coordinates_1, coordinates_2)
-    return sum(dists) / len(dists)
+    if not coordinates_1:
+        return 0
+
+    sum_dx = 0
+    sum_dy = 0
+    count = len(coordinates_1)
+
+    for i in range(count):
+        sum_dx += coordinates_2[i][0] - coordinates_1[i][0]
+        sum_dy += coordinates_2[i][1] - coordinates_1[i][1]
+
+    mean_dx = sum_dx / count
+    mean_dy = sum_dy / count
+
+    return math.hypot(mean_dx, mean_dy)
 
 def calculate_speed_in_kmps(feature_distance, GSD, time_difference, iss_altitude):
     ground_distance_m = (feature_distance * GSD) / 100
@@ -112,7 +113,7 @@ def calculate_speed_in_kmps(feature_distance, GSD, time_difference, iss_altitude
 def calculate(image_1, image_2, time_difference, iss_altitude):
     img1_cv, img2_cv = convert_to_cv(image_1, image_2)
 
-    keypoints_1, keypoints_2, descriptors_1, descriptors_2 = calculate_features(img1_cv, img2_cv, 2000)
+    keypoints_1, keypoints_2, descriptors_1, descriptors_2 = calculate_features(img1_cv, img2_cv, 1000)
 
     matches = calculate_matches(descriptors_1, descriptors_2)
 
@@ -137,5 +138,28 @@ def calculate(image_1, image_2, time_difference, iss_altitude):
     GSD = (iss_altitude * 100 * sensor_width_mm) / (focal_length_mm * image_width_px)
     speed = calculate_speed_in_kmps(average_feature_distance, GSD, time_difference, iss_altitude)
 
-    print(speed)
+    print(f"speed: {speed:.4f} km/h, inliers: {inliers_count}")
+
+    """h1, w1 = img1_cv.shape
+    h2, w2 = img2_cv.shape
+    output_visual = np.zeros((max(h1, h2), w1 + w2), dtype=np.uint8)
+    output_visual[:h1, :w1] = img1_cv
+    output_visual[:h2, w1:w1 + w2] = img2_cv
+    output_visual = cv2.cvtColor(output_visual, cv2.COLOR_GRAY2BGR)  # Convert to color to draw colored lines
+
+    # 2. Manually draw thick lines for the top 50 matches
+    for m in ransac_matches:
+        # Get the coordinates
+        pt1 = (int(keypoints_1[m.queryIdx].pt[0]), int(keypoints_1[m.queryIdx].pt[1]))
+        pt2 = (int(keypoints_2[m.trainIdx].pt[0] + w1), int(keypoints_2[m.trainIdx].pt[1]))
+
+        # Draw the line with thickness=3
+        cv2.line(output_visual, pt1, pt2, (0, 255, 0), 3)
+        # Draw a circle at the joints
+        cv2.circle(output_visual, pt1, 5, (0, 0, 255), -1)
+        cv2.circle(output_visual, pt2, 5, (0, 0, 255), -1)
+    # if speed < 4 or speed > 9:
+    cv2.imshow("Feature Matches", output_visual)
+    cv2.waitKey(0)  # This keeps the window open until you press a key
+    cv2.destroyAllWindows()"""
     return speed, inliers_count
