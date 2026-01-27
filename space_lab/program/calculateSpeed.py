@@ -1,4 +1,6 @@
 import math
+import os
+
 import numpy as np
 
 import cv2
@@ -13,38 +15,44 @@ def calculate_features(image_1, image_2, feature_number):
     orb = cv2.ORB_create(nfeatures=feature_number)
     height, width = image_1.shape
 
-    mask = None
-
-    # Check corners to see if we need a mask (Threshold 15 for noise)
+    # --- STEP 1: Create the Porthole Mask (Your original logic) ---
+    porthole_mask = np.ones((height, width), dtype=np.uint8) * 255
     corners = [image_1[0, 0], image_1[0, width - 1],
                image_1[height - 1, 0], image_1[height - 1, width - 1]]
 
     if all(pixel < 40 for pixel in corners):
-        # 1. Create a binary version of the image:
-        # Anything not black becomes white (255)
         _, thresh = cv2.threshold(image_1, 80, 255, cv2.THRESH_BINARY)
-
-        # 2. Find the bounding box of all white pixels
-        # This locates the 'porthole' regardless of what's inside it
         coords = cv2.findNonZero(thresh)
         if coords is not None:
             x, y, w, h = cv2.boundingRect(coords)
-
-            # 3. Calculate center and radius based on the bounding box
             center_x = x + w // 2
             center_y = y + h // 2
-            # Use the smaller dimension to ensure the circle stays inside the box
             radius = int(min(w, h) / 2 * 0.9)
 
-            # 4. Final check: Only create mask if radius is valid
             if radius > 10:
-                mask = np.zeros((height, width), dtype=np.uint8)
-                cv2.circle(mask, (center_x, center_y), radius, 255, -1)
+                porthole_mask = np.zeros((height, width), dtype=np.uint8)
+                cv2.circle(porthole_mask, (center_x, center_y), radius, 255, -1)
 
-    # 5. EXECUTION: If mask is invalid/too small, orb will just use the whole image
+    # --- STEP 2: Create the Motion Mask (The "Rope Killer") ---
+    # Find absolute difference between frames
+    diff = cv2.absdiff(image_1, image_2)
+
+    # Threshold it: only pixels that changed significantly are kept
+    # 25 is a good sensitivity; increase if you still see rope, decrease if ground is faint
+    _, motion_mask = cv2.threshold(diff, 25, 255, cv2.THRESH_BINARY)
+
+    # Clean up motion mask noise (small speckles)
+    kernel = np.ones((5, 5), np.uint8)
+    motion_mask = cv2.morphologyEx(motion_mask, cv2.MORPH_OPEN, kernel)
+
+    # --- STEP 3: Combine Masks ---
+    # The final mask is only where (It is in the Porthole) AND (It is Moving)
+    final_combined_mask = cv2.bitwise_and(porthole_mask, motion_mask)
+
+    # --- STEP 4: Execution ---
     try:
-        keypoints_1, descriptors_1 = orb.detectAndCompute(image_1, mask)
-        keypoints_2, descriptors_2 = orb.detectAndCompute(image_2, mask)
+        keypoints_1, descriptors_1 = orb.detectAndCompute(image_1, final_combined_mask)
+        keypoints_2, descriptors_2 = orb.detectAndCompute(image_2, final_combined_mask)
     except Exception as e:
         print(f"Mask error, falling back to full image: {e}")
         keypoints_1, descriptors_1 = orb.detectAndCompute(image_1, None)
@@ -151,7 +159,7 @@ def calculate(image_1, image_2, time_difference, iss_altitude, latitude):
     GSD = (iss_altitude * sensor_width_mm) / (focal_length_mm * image_width_px)
     speed = calculate_speed_in_kmps(average_feature_distance, GSD, time_difference, iss_altitude, latitude)
 
-    print(f"speed: {speed:.4f} km/h, inliers: {inliers_count}")
+    print(f"speed: {speed:.5g} km/h, inliers: {inliers_count}, image name: {os.path.basename(image_2)}")
 
     """h1, w1 = img1_cv.shape
     h2, w2 = img2_cv.shape
@@ -171,8 +179,8 @@ def calculate(image_1, image_2, time_difference, iss_altitude, latitude):
         # Draw a circle at the joints
         cv2.circle(output_visual, pt1, 5, (0, 0, 255), -1)
         cv2.circle(output_visual, pt2, 5, (0, 0, 255), -1)
-    # if speed < 4 or speed > 9:
-    cv2.imshow("Feature Matches", output_visual)
-    cv2.waitKey(0)  # This keeps the window open until you press a key
-    cv2.destroyAllWindows()"""
+    if speed < 4 or speed > 9:
+        cv2.imshow("Feature Matches", output_visual)
+        cv2.waitKey(0)  # This keeps the window open until you press a key
+        cv2.destroyAllWindows()"""
     return speed, inliers_count
