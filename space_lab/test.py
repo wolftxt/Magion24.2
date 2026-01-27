@@ -46,6 +46,7 @@ def main():
         subfolders = [str(PARENT_IMAGE_DIR)]
 
     all_subfolder_averages = []
+    all_speed_values = []
 
     for image_dir in subfolders:
         folder_name = os.path.basename(image_dir)
@@ -80,7 +81,10 @@ def main():
                     "speed": speed,
                     "confidence": inliers
                 })
+                all_speed_values.append(speed)
 
+        all_raw_speeds = [res["speed"] for res in results]
+        stdev_of_all_speeds = statistics.stdev(all_raw_speeds)
         # Filter for best results (top 25%)
         results.sort(key=lambda x: x["confidence"], reverse=True)
         top_n = max(1, len(results) // 4)
@@ -91,13 +95,14 @@ def main():
 
         folder_speeds = []
         for res in best_results:
-            print(f"{res['name']:<30} | {res['speed']:.4f} km/s   | {res['confidence']}")
+            print(f"{res['name']:<30} | {res['speed']:.5g} km/s   | {res['confidence']}")
             folder_speeds.append(res["speed"])
 
         if folder_speeds:
             folder_avg = sum(folder_speeds) / len(folder_speeds)
             print("-" * 60)
-            print(f"Final Filtered Average Speed for {folder_name}: {folder_avg:.4f} km/s")
+            print(f"Final Filtered Average Speed for {folder_name}: {folder_avg:.5g} km/s")
+            print(f"Standard deviation for all images in {folder_name}: {stdev_of_all_speeds:.5g} km/s")
             all_subfolder_averages.append(folder_avg)
         else:
             print("No valid matches found.")
@@ -105,6 +110,7 @@ def main():
 
     # --- Final Calculations ---
     if len(all_subfolder_averages) > 0:
+        stdev_of_all_images = statistics.stdev(all_speed_values)
         grand_average = statistics.mean(all_subfolder_averages)
 
         # Standard deviation requires at least two data points
@@ -115,8 +121,9 @@ def main():
 
         print("\n" + "#" * 60)
         print(f"SUMMARY FOR ALL SUBFOLDERS:")
-        print(f"Grand Average Speed: {grand_average:.4f} km/s")
-        print(f"Standard Deviation:  {stdev:.4f} km/s")
+        print(f"Grand Average Speed: {grand_average:.5g} km/s")
+        print(f"Standard Deviation:  {stdev:.5g} km/s")
+        print(f"Standard Deviation of all images:  {stdev_of_all_images:.5g} km/s")
         print("#" * 60)
 
 
