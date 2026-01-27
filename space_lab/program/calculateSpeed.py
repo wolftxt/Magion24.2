@@ -106,7 +106,7 @@ def calculate_mean_distance(coordinates_1, coordinates_2):
 def calculate_speed_in_kmps(feature_distance, gsd, time_difference, iss_altitude, latitude):
     inclination = math.radians(51.6)
     lat_rad = math.radians(latitude)
-    d_r = 463.8 * math.cos(lat_rad)
+    d_r = 463.8 * math.cos(lat_rad) * time_difference
     cos_beta = math.cos(inclination) / math.cos(lat_rad)
     cos_beta = min(1.0, max(-1.0, cos_beta))
 
