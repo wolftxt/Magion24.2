@@ -4,6 +4,7 @@ import os
 import sys
 import time
 import requests
+import json
 from glob import glob
 from pathlib import Path
 import statistics
@@ -18,12 +19,28 @@ except ImportError:
     sys.exit(1)
 
 PARENT_IMAGE_DIR = BASE_DIR / "images"
+CACHE_FILE = BASE_DIR / "iss_cache.json"
 
 
 # --- Added: Historical API Lookup ---
 def get_historical_iss_position(dt):
     """Queries the 'Where the ISS at?' API for historical position at img2 time."""
     timestamp = int(dt.timestamp())
+    ts_key = str(timestamp)
+
+    # Load existing cache
+    cache = {}
+    if CACHE_FILE.exists():
+        try:
+            with open(CACHE_FILE, "r") as f:
+                cache = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            cache = {}
+
+    # Check if value is in cache
+    if ts_key in cache:
+        return cache[ts_key]["lat"], cache[ts_key]["alt"]
+
     url = f"https://api.wheretheiss.at/v1/satellites/25544/positions?timestamps={timestamp}&units=kilometers"
     try:
         # Respect API rate limit (1 request per second)
@@ -34,6 +51,12 @@ def get_historical_iss_position(dt):
             pos = data[0]
             lat = float(pos['latitude'])
             alt_m = float(pos['altitude']) * 1000  # Convert km to meters
+
+            # Save to cache
+            cache[ts_key] = {"lat": lat, "alt": alt_m}
+            with open(CACHE_FILE, "w") as f:
+                json.dump(cache, f)
+
             return lat, alt_m
     except Exception as e:
         print(f"API Error for timestamp {timestamp}: {e}")
