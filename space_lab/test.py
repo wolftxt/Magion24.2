@@ -1,7 +1,9 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from exif import Image
 import os
 import sys
+import time
+import requests
 from glob import glob
 from pathlib import Path
 import statistics
@@ -18,12 +20,33 @@ except ImportError:
 PARENT_IMAGE_DIR = BASE_DIR / "images"
 
 
+# --- Added: Historical API Lookup ---
+def get_historical_iss_position(dt):
+    """Queries the 'Where the ISS at?' API for historical position at img2 time."""
+    timestamp = int(dt.timestamp())
+    url = f"https://api.wheretheiss.at/v1/satellites/25544/positions?timestamps={timestamp}&units=kilometers"
+    try:
+        # Respect API rate limit (1 request per second)
+        time.sleep(1.1)
+        response = requests.get(url, timeout=10)
+        data = response.json()
+        if isinstance(data, list) and len(data) > 0:
+            pos = data[0]
+            lat = float(pos['latitude'])
+            alt_m = float(pos['altitude']) * 1000  # Convert km to meters
+            return lat, alt_m
+    except Exception as e:
+        print(f"API Error for timestamp {timestamp}: {e}")
+    return None, None
+
+
 def get_time(image):
     with open(image, "rb") as image_file:
         img = Image(image_file)
         time_str = img.get("datetime_original")
-        time = datetime.strptime(time_str, "%Y:%m:%d %H:%M:%S")
-    return time
+        # Treated as UTC for the API call
+        time_obj = datetime.strptime(time_str, "%Y:%m:%d %H:%M:%S").replace(tzinfo=timezone.utc)
+    return time_obj
 
 
 def get_time_difference(image_1, image_2):
@@ -37,11 +60,7 @@ def main():
     if not os.path.exists(PARENT_IMAGE_DIR):
         return
 
-    # Identify subfolders within the highlights path
-    # Using glob to find actual subdirectories if they exist
     subfolders = sorted([str(f) for f in PARENT_IMAGE_DIR.iterdir() if f.is_dir()])
-
-    # Fallback if no subfolders exist and astur3 is the target itself
     if not subfolders:
         subfolders = [str(PARENT_IMAGE_DIR)]
 
@@ -67,9 +86,20 @@ def main():
         for i in range(len(image_files) - 1):
             img1 = image_files[i]
             img2 = image_files[i + 1]
+
+            # Get exact time for API lookup
+            img2_time = get_time(img2)
             time_difference = get_time_difference(img1, img2)
+
             try:
-                speed, inliers = calculate(img1, img2, time_difference, 420000, 0) ## Height of ISS in m
+                # Replace constants with historical API data
+                iss_latitude, iss_altitude = get_historical_iss_position(img2_time)
+
+                if iss_latitude is not None:
+                    speed, inliers = calculate(img1, img2, time_difference, iss_altitude, iss_latitude)
+                else:
+                    raise ValueError("Could not retrieve ISS data from API")
+
             except Exception as e:
                 print(f"Error processing {os.path.basename(img2)}: {e}")
                 speed = -1
@@ -83,8 +113,13 @@ def main():
                 })
                 all_speed_values.append(speed)
 
+        if not results:
+            print("No valid matches found.")
+            continue
+
         all_raw_speeds = [res["speed"] for res in results]
-        stdev_of_all_speeds = statistics.stdev(all_raw_speeds)
+        stdev_of_all_speeds = statistics.stdev(all_raw_speeds) if len(all_raw_speeds) > 1 else 0
+
         # Filter for best results (top 25%)
         results.sort(key=lambda x: x["confidence"], reverse=True)
         top_n = max(1, len(results) // 4)
@@ -104,20 +139,13 @@ def main():
             print(f"Final Filtered Average Speed for {folder_name}: {folder_avg:.5g} km/s")
             print(f"Standard deviation for all images in {folder_name}: {stdev_of_all_speeds:.5g} km/s")
             all_subfolder_averages.append(folder_avg)
-        else:
-            print("No valid matches found.")
         print("=" * 60)
 
     # --- Final Calculations ---
     if len(all_subfolder_averages) > 0:
-        stdev_of_all_images = statistics.stdev(all_speed_values)
+        stdev_of_all_images = statistics.stdev(all_speed_values) if len(all_speed_values) > 1 else 0
         grand_average = statistics.mean(all_subfolder_averages)
-
-        # Standard deviation requires at least two data points
-        if len(all_subfolder_averages) > 1:
-            stdev = statistics.stdev(all_subfolder_averages)
-        else:
-            stdev = 0.0
+        stdev = statistics.stdev(all_subfolder_averages) if len(all_subfolder_averages) > 1 else 0.0
 
         print("\n" + "#" * 60)
         print(f"SUMMARY FOR ALL SUBFOLDERS:")
