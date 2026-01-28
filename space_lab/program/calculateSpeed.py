@@ -1,9 +1,8 @@
 import math
 import os
-
 import numpy as np
-
 import cv2
+
 
 def convert_to_cv(image_1, image_2):
     image_1_cv = cv2.imread(image_1, 0)
@@ -33,26 +32,53 @@ def calculate_features(image_1, image_2, feature_number):
                 porthole_mask = np.zeros((height, width), dtype=np.uint8)
                 cv2.circle(porthole_mask, (center_x, center_y), radius, 255, -1)
 
+    # --- NEW: COARSE PASS (Finding the Shift) ---
+    # We find the shift first using the porthole area only
+    kp_c1, des_c1 = orb.detectAndCompute(image_1, porthole_mask)
+    kp_c2, des_c2 = orb.detectAndCompute(image_2, porthole_mask)
+
+    shift_x, shift_y = 0, 0
+    if des_c1 is not None and des_c2 is not None:
+        bf_coarse = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+        coarse_matches = bf_coarse.match(des_c1, des_c2)
+        if len(coarse_matches) > 5:
+            dxs = [kp_c2[m.trainIdx].pt[0] - kp_c1[m.queryIdx].pt[0] for m in coarse_matches]
+            dys = [kp_c2[m.trainIdx].pt[1] - kp_c1[m.queryIdx].pt[1] for m in coarse_matches]
+            shift_x, shift_y = np.median(dxs), np.median(dys)
+
+    mask_v1 = np.zeros((height, width), dtype=np.uint8)
+    mask_v2 = np.zeros((height, width), dtype=np.uint8)
+
+    # Bounds for Image 1 (exclude stuff leaving)
+    x1_min, x1_max = int(max(0, -shift_x)), int(min(width, width - shift_x))
+    y1_min, y1_max = int(max(0, -shift_y)), int(min(height, height - shift_y))
+
+    # Bounds for Image 2 (exclude stuff just entered)
+    x2_min, x2_max = int(max(0, shift_x)), int(min(width, width + shift_x))
+    y2_min, y2_max = int(max(0, shift_y)), int(min(height, height + shift_y))
+
+    mask_v1[y1_min:y1_max, x1_min:x1_max] = 255
+    mask_v2[y2_min:y2_max, x2_min:x2_max] = 255
+
     # --- STEP 2: Create the Motion Mask (The "Rope Killer") ---
-    # Find absolute difference between frames
     diff = cv2.absdiff(image_1, image_2)
-
-    # Threshold it: only pixels that changed significantly are kept
-    # 25 is a good sensitivity; increase if you still see rope, decrease if ground is faint
-    _, motion_mask = cv2.threshold(diff, 25, 255, cv2.THRESH_BINARY)
-
-    # Clean up motion mask noise (small speckles)
+    _, motion_mask = cv2.threshold(diff, 10, 255, cv2.THRESH_BINARY)
     kernel = np.ones((5, 5), np.uint8)
     motion_mask = cv2.morphologyEx(motion_mask, cv2.MORPH_OPEN, kernel)
 
     # --- STEP 3: Combine Masks ---
-    # The final mask is only where (It is in the Porthole) AND (It is Moving)
-    final_combined_mask = cv2.bitwise_and(porthole_mask, motion_mask)
+    # Image 1 mask: Porthole AND Motion AND Visibility
+    final_mask_1 = cv2.bitwise_and(porthole_mask, motion_mask)
+    final_mask_1 = cv2.bitwise_and(final_mask_1, mask_v1)
 
-    # --- STEP 4: Execution ---
+    # Image 2 mask: Porthole AND Motion AND Visibility
+    final_mask_2 = cv2.bitwise_and(porthole_mask, motion_mask)
+    final_mask_2 = cv2.bitwise_and(final_mask_2, mask_v2)
+
+
     try:
-        keypoints_1, descriptors_1 = orb.detectAndCompute(image_1, final_combined_mask)
-        keypoints_2, descriptors_2 = orb.detectAndCompute(image_2, final_combined_mask)
+        keypoints_1, descriptors_1 = orb.detectAndCompute(image_1, final_mask_1)
+        keypoints_2, descriptors_2 = orb.detectAndCompute(image_2, final_mask_2)
     except Exception as e:
         print(f"Mask error, falling back to full image: {e}")
         keypoints_1, descriptors_1 = orb.detectAndCompute(image_1, None)
@@ -74,6 +100,7 @@ def calculate_matches(descriptors_1, descriptors_2):
 
     good_matches = sorted(good_matches, key=lambda x: x.distance)
     return good_matches
+
 
 def find_matching_coordinates(keypoints_1, keypoints_2, matches):
     coordinates_1 = []
@@ -104,12 +131,13 @@ def calculate_mean_distance(coordinates_1, coordinates_2):
             count -= 1
             continue
         sum_dx += dx
-        sum_dy += dy 
+        sum_dy += dy
 
     mean_dx = sum_dx / count
     mean_dy = sum_dy / count
 
     return math.hypot(mean_dx, mean_dy)
+
 
 def calculate_speed_in_kmps(feature_distance, gsd, time_difference, iss_altitude, latitude):
     inclination = math.radians(51.6)
@@ -123,7 +151,7 @@ def calculate_speed_in_kmps(feature_distance, gsd, time_difference, iss_altitude
 
     earth_radius = 6371000
 
-    angle = 2 * math.asin(d_g_and_r/earth_radius/2)
+    angle = 2 * math.asin(d_g_and_r / earth_radius / 2)
 
     arc_distance = angle * (earth_radius + iss_altitude)
     speed_in_mps = arc_distance / time_difference
@@ -166,21 +194,16 @@ def calculate(image_1, image_2, time_difference, iss_altitude, latitude):
     output_visual = np.zeros((max(h1, h2), w1 + w2), dtype=np.uint8)
     output_visual[:h1, :w1] = img1_cv
     output_visual[:h2, w1:w1 + w2] = img2_cv
-    output_visual = cv2.cvtColor(output_visual, cv2.COLOR_GRAY2BGR)  # Convert to color to draw colored lines
+    output_visual = cv2.cvtColor(output_visual, cv2.COLOR_GRAY2BGR)
 
-    # 2. Manually draw thick lines for the top 50 matches
     for m in ransac_matches:
-        # Get the coordinates
         pt1 = (int(keypoints_1[m.queryIdx].pt[0]), int(keypoints_1[m.queryIdx].pt[1]))
         pt2 = (int(keypoints_2[m.trainIdx].pt[0] + w1), int(keypoints_2[m.trainIdx].pt[1]))
-
-        # Draw the line with thickness=3
         cv2.line(output_visual, pt1, pt2, (0, 255, 0), 3)
-        # Draw a circle at the joints
         cv2.circle(output_visual, pt1, 5, (0, 0, 255), -1)
         cv2.circle(output_visual, pt2, 5, (0, 0, 255), -1)
-    if speed < 4 or speed > 9:
-        cv2.imshow("Feature Matches", output_visual)
-        cv2.waitKey(0)  # This keeps the window open until you press a key
-        cv2.destroyAllWindows()"""
+
+    cv2.imshow("Feature Matches", output_visual)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()"""
     return speed, inliers_count
