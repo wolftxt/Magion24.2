@@ -9,33 +9,24 @@ def convert_to_cv(image_1, image_2):
     image_2_cv = cv2.imread(image_2, 0)
     return image_1_cv, image_2_cv
 
+def shift_mask(mask, shift_x, shift_y):
+    rows, cols = mask.shape[:2]
+    M = np.float32([[1, 0, shift_x], [0, 1, shift_y]])
+    shifted_mask = cv2.warpAffine(mask, M, (cols, rows))
+    return shifted_mask
 
 def calculate_features(image_1, image_2, feature_number):
     orb = cv2.ORB_create(nfeatures=feature_number)
     height, width = image_1.shape
 
-    # --- STEP 1: Create the Porthole Mask (Your original logic) ---
-    porthole_mask = np.ones((height, width), dtype=np.uint8) * 255
-    corners = [image_1[0, 0], image_1[0, width - 1],
-               image_1[height - 1, 0], image_1[height - 1, width - 1]]
+    diff = cv2.absdiff(image_1, image_2)
+    _, motion_mask = cv2.threshold(diff, 10, 255, cv2.THRESH_BINARY)
+    kernel = np.ones((5, 5), np.uint8)
+    motion_mask = cv2.morphologyEx(motion_mask, cv2.MORPH_OPEN, kernel)
 
-    if all(pixel < 40 for pixel in corners):
-        _, thresh = cv2.threshold(image_1, 80, 255, cv2.THRESH_BINARY)
-        coords = cv2.findNonZero(thresh)
-        if coords is not None:
-            x, y, w, h = cv2.boundingRect(coords)
-            center_x = x + w // 2
-            center_y = y + h // 2
-            radius = int(min(w, h) / 2 * 0.9)
-
-            if radius > 10:
-                porthole_mask = np.zeros((height, width), dtype=np.uint8)
-                cv2.circle(porthole_mask, (center_x, center_y), radius, 255, -1)
-
-    # --- NEW: COARSE PASS (Finding the Shift) ---
-    # We find the shift first using the porthole area only
-    kp_c1, des_c1 = orb.detectAndCompute(image_1, porthole_mask)
-    kp_c2, des_c2 = orb.detectAndCompute(image_2, porthole_mask)
+    # First coarse search
+    kp_c1, des_c1 = orb.detectAndCompute(image_1, motion_mask)
+    kp_c2, des_c2 = orb.detectAndCompute(image_2, motion_mask)
 
     shift_x, shift_y = 0, 0
     if des_c1 is not None and des_c2 is not None:
@@ -46,35 +37,11 @@ def calculate_features(image_1, image_2, feature_number):
             dys = [kp_c2[m.trainIdx].pt[1] - kp_c1[m.queryIdx].pt[1] for m in coarse_matches]
             shift_x, shift_y = np.median(dxs), np.median(dys)
 
-    mask_v1 = np.zeros((height, width), dtype=np.uint8)
-    mask_v2 = np.zeros((height, width), dtype=np.uint8)
+    shifted_mask_1 = shift_mask(motion_mask, -shift_x, -shift_y)
+    shifted_mask_2 = shift_mask(motion_mask, shift_x, shift_y)
 
-    # Bounds for Image 1 (exclude stuff leaving)
-    x1_min, x1_max = int(max(0, -shift_x)), int(min(width, width - shift_x))
-    y1_min, y1_max = int(max(0, -shift_y)), int(min(height, height - shift_y))
-
-    # Bounds for Image 2 (exclude stuff just entered)
-    x2_min, x2_max = int(max(0, shift_x)), int(min(width, width + shift_x))
-    y2_min, y2_max = int(max(0, shift_y)), int(min(height, height + shift_y))
-
-    mask_v1[y1_min:y1_max, x1_min:x1_max] = 255
-    mask_v2[y2_min:y2_max, x2_min:x2_max] = 255
-
-    # --- STEP 2: Create the Motion Mask (The "Rope Killer") ---
-    diff = cv2.absdiff(image_1, image_2)
-    _, motion_mask = cv2.threshold(diff, 10, 255, cv2.THRESH_BINARY)
-    kernel = np.ones((5, 5), np.uint8)
-    motion_mask = cv2.morphologyEx(motion_mask, cv2.MORPH_OPEN, kernel)
-
-    # --- STEP 3: Combine Masks ---
-    # Image 1 mask: Porthole AND Motion AND Visibility
-    final_mask_1 = cv2.bitwise_and(porthole_mask, motion_mask)
-    final_mask_1 = cv2.bitwise_and(final_mask_1, mask_v1)
-
-    # Image 2 mask: Porthole AND Motion AND Visibility
-    final_mask_2 = cv2.bitwise_and(porthole_mask, motion_mask)
-    final_mask_2 = cv2.bitwise_and(final_mask_2, mask_v2)
-
+    final_mask_1 = cv2.bitwise_and(motion_mask, shifted_mask_1)
+    final_mask_2 = cv2.bitwise_and(motion_mask, shifted_mask_2)
 
     try:
         keypoints_1, descriptors_1 = orb.detectAndCompute(image_1, final_mask_1)
