@@ -138,6 +138,16 @@ def calculate_mean_distance(coordinates_1, coordinates_2):
 
     return math.hypot(mean_dx, mean_dy)
 
+def get_earth_radius(latitude):
+    a = 6378137  # earth_equator_radius
+    b = 6356752  # earth_polar_radius
+    a_cos = a * math.cos(latitude)
+    b_sin = b * math.sin(latitude)
+
+    numerator = (a_cos * a) ** 2 + (b_sin * b) ** 2
+    denominator = a_cos ** 2 + b_sin ** 2
+    return math.sqrt(numerator / denominator)
+
 
 def calculate_speed_in_kmps(feature_distance, gsd, time_difference, iss_altitude, latitude):
     inclination = math.radians(51.6)
@@ -149,14 +159,7 @@ def calculate_speed_in_kmps(feature_distance, gsd, time_difference, iss_altitude
     d_g = (feature_distance * gsd)
     d_g_and_r = math.sqrt(d_g ** 2 + d_r ** 2 + 2 * d_g * d_r * cos_beta)
 
-    a = 6378137 # earth_equator_radius
-    b = 6356752 # earth_polar_radius
-    a_cos = a * math.cos(latitude)
-    b_sin = b * math.sin(latitude)
-
-    numerator = (a_cos * a) ** 2 + (b_sin * b) ** 2
-    denominator = a_cos ** 2 + b_sin ** 2
-    earth_radius = math.sqrt(numerator / denominator)
+    earth_radius = get_earth_radius()
 
     # Small inefficiency in the assumption that earth is a perfect sphere
     angle = 2 * math.asin(d_g_and_r / earth_radius / 2)
