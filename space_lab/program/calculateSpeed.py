@@ -150,7 +150,7 @@ def get_earth_radius(latitude):
 
 
 def calculate_speed_in_kmps(feature_distance, gsd, time_difference, iss_altitude, latitude):
-    inclination = math.radians(51.6)
+    inclination = math.radians(51.64)
     lat_rad = math.radians(latitude)
     d_r = 463.8 * math.cos(lat_rad) * time_difference
     cos_beta = math.cos(inclination) / math.cos(lat_rad)
@@ -159,7 +159,7 @@ def calculate_speed_in_kmps(feature_distance, gsd, time_difference, iss_altitude
     d_g = (feature_distance * gsd)
     d_g_and_r = math.sqrt(d_g ** 2 + d_r ** 2 + 2 * d_g * d_r * cos_beta)
 
-    earth_radius = get_earth_radius()
+    earth_radius = get_earth_radius(latitude)
 
     # Small inefficiency in the assumption that earth is a perfect sphere
     angle = 2 * math.asin(d_g_and_r / earth_radius / 2)
