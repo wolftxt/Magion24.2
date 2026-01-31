@@ -3,7 +3,6 @@ import os
 import numpy as np
 import cv2
 
-
 def convert_to_cv(image_1, image_2):
     image_1_cv = cv2.imread(image_1, 0)
     image_2_cv = cv2.imread(image_2, 0)
@@ -15,9 +14,43 @@ def shift_mask(mask, shift_x, shift_y):
     shifted_mask = cv2.warpAffine(mask, M, (cols, rows))
     return shifted_mask
 
+
+def grid_calculate_features(image, mask, feature_number=2000, grid_size=(2, 2)):
+    h, w = image.shape
+    rows, cols = grid_size
+    features_per_cell = feature_number // (rows * cols)
+
+    orb = cv2.ORB_create(nfeatures=feature_number,
+                         scaleFactor=1.2,
+                         nlevels=8,
+                         edgeThreshold=15,
+                         patchSize=15,
+                         fastThreshold=5
+                         )
+    all_kp = []
+    all_des = []
+
+    for r in range(rows):
+        for c in range(cols):
+            y1, y2 = (r * h // rows), ((r + 1) * h // rows)
+            x1, x2 = (c * w // cols), ((c + 1) * w // cols)
+
+            cell = image[y1:y2, x1:x2]
+            kp, des = orb.detectAndCompute(cell, None)
+
+            if kp:
+                # Offset keypoint coordinates back to global image space
+                for k in kp:
+                    k.pt = (k.pt[0] + x1, k.pt[1] + y1)
+                all_kp.extend(kp)
+                all_des.append(des)
+
+    # Re-stack descriptors into a single numpy array
+    import numpy as np
+    descriptors = np.vstack(all_des) if all_des else None
+    return all_kp, descriptors
+
 def calculate_features(image_1, image_2, feature_number):
-    orb = cv2.ORB_create(nfeatures=feature_number)
-    height, width = image_1.shape
 
     diff = cv2.absdiff(image_1, image_2)
     _, motion_mask = cv2.threshold(diff, 10, 255, cv2.THRESH_BINARY)
@@ -25,17 +58,26 @@ def calculate_features(image_1, image_2, feature_number):
     motion_mask = cv2.morphologyEx(motion_mask, cv2.MORPH_OPEN, kernel)
 
     # First coarse search
-    kp_c1, des_c1 = orb.detectAndCompute(image_1, motion_mask)
-    kp_c2, des_c2 = orb.detectAndCompute(image_2, motion_mask)
+    kp_c1, des_c1 = grid_calculate_features(image_1, motion_mask)
+    kp_c2, des_c2 = grid_calculate_features(image_2, motion_mask)
 
     shift_x, shift_y = 0, 0
     if des_c1 is not None and des_c2 is not None:
         bf_coarse = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-        coarse_matches = bf_coarse.match(des_c1, des_c2)
-        if len(coarse_matches) > 5:
-            dxs = [kp_c2[m.trainIdx].pt[0] - kp_c1[m.queryIdx].pt[0] for m in coarse_matches]
-            dys = [kp_c2[m.trainIdx].pt[1] - kp_c1[m.queryIdx].pt[1] for m in coarse_matches]
-            shift_x, shift_y = np.median(dxs), np.median(dys)
+        coarse_matches = calculate_matches(des_c1, des_c2)
+
+        src_pts = np.float32([kp_c1[m.queryIdx].pt for m in coarse_matches]).reshape(-1, 1, 2)
+        dst_pts = np.float32([kp_c2[m.trainIdx].pt for m in coarse_matches]).reshape(-1, 1, 2)
+
+        M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
+
+        inliers_count = np.sum(mask)
+        matches_mask = mask.flatten().tolist()
+        coarse_matches = [m for i, m in enumerate(coarse_matches) if matches_mask[i] == 1]
+
+        dxs = [kp_c2[m.trainIdx].pt[0] - kp_c1[m.queryIdx].pt[0] for m in coarse_matches]
+        dys = [kp_c2[m.trainIdx].pt[1] - kp_c1[m.queryIdx].pt[1] for m in coarse_matches]
+        shift_x, shift_y = np.median(dxs), np.median(dys)
 
     shifted_mask_1 = shift_mask(motion_mask, -shift_x, -shift_y)
     shifted_mask_2 = shift_mask(motion_mask, shift_x, shift_y)
@@ -43,30 +85,16 @@ def calculate_features(image_1, image_2, feature_number):
     final_mask_1 = cv2.bitwise_and(motion_mask, shifted_mask_1)
     final_mask_2 = cv2.bitwise_and(motion_mask, shifted_mask_2)
 
-    try:
-        keypoints_1, descriptors_1 = orb.detectAndCompute(image_1, final_mask_1)
-        keypoints_2, descriptors_2 = orb.detectAndCompute(image_2, final_mask_2)
-    except Exception as e:
-        print(f"Mask error, falling back to full image: {e}")
-        keypoints_1, descriptors_1 = orb.detectAndCompute(image_1, None)
-        keypoints_2, descriptors_2 = orb.detectAndCompute(image_2, None)
+    keypoints_1, descriptors_1 = grid_calculate_features(image_1, final_mask_1, feature_number)
+    keypoints_2, descriptors_2 = grid_calculate_features(image_2, final_mask_2, feature_number)
 
     return keypoints_1, keypoints_2, descriptors_1, descriptors_2
 
 
 def calculate_matches(descriptors_1, descriptors_2):
-    bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
-    raw_matches = bf.knnMatch(descriptors_1, descriptors_2, k=2)
-
-    good_matches = []
-    for match in raw_matches:
-        if len(match) == 2:
-            m, n = match
-            if m.distance < 0.80 * n.distance:
-                good_matches.append(m)
-
-    good_matches = sorted(good_matches, key=lambda x: x.distance)
-    return good_matches
+    bf_coarse = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+    matches = bf_coarse.match(descriptors_1, descriptors_2)
+    return matches
 
 
 def find_matching_coordinates(keypoints_1, keypoints_2, matches):
