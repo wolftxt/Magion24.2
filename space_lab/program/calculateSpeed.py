@@ -1,7 +1,6 @@
 import math
 import os
 from collections import deque
-import time
 
 import numpy as np
 import cv2
@@ -27,7 +26,7 @@ def get_stability_mask(new_frame):
     min_vals = np.min(frame_buffer, axis=0)
     diff_stack = max_vals - min_vals
 
-    stability_mask = np.where(diff_stack > 30, 255, 0).astype(np.uint8)
+    stability_mask = np.where(diff_stack > 28, 255, 0).astype(np.uint8)
 
     return stability_mask
 
@@ -56,8 +55,8 @@ def grid_calculate_features(image, mask, feature_number=2000, grid_size=(2, 2)):
     orb = cv2.ORB_create(nfeatures=feature_number,
                          scaleFactor=1.2,
                          nlevels=8,
-                         edgeThreshold=15,
-                         patchSize=15,
+                         edgeThreshold=20,
+                         patchSize=20,
                          fastThreshold=5
                          )
     all_kp = []
@@ -69,7 +68,8 @@ def grid_calculate_features(image, mask, feature_number=2000, grid_size=(2, 2)):
             x1, x2 = (c * w // cols), ((c + 1) * w // cols)
 
             cell = image[y1:y2, x1:x2]
-            kp, des = orb.detectAndCompute(cell, None)
+            mask_cell = mask[y1:y2, x1:x2]
+            kp, des = orb.detectAndCompute(cell, mask_cell)
 
             if kp:
                 # Offset keypoint coordinates back to global image space
@@ -93,7 +93,6 @@ def calculate_features(image_1, image_2, feature_number):
 
     shift_x, shift_y = 0, 0
     if des_c1 is not None and des_c2 is not None:
-        bf_coarse = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
         coarse_matches = calculate_matches(des_c1, des_c2)
 
         src_pts = np.float32([kp_c1[m.queryIdx].pt for m in coarse_matches]).reshape(-1, 1, 2)
@@ -101,7 +100,6 @@ def calculate_features(image_1, image_2, feature_number):
 
         M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
 
-        inliers_count = np.sum(mask)
         matches_mask = mask.flatten().tolist()
         coarse_matches = [m for i, m in enumerate(coarse_matches) if matches_mask[i] == 1]
 
