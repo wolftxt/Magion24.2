@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import cv2
 from exif import Image
 import os
 import sys
@@ -14,7 +15,7 @@ program_path = BASE_DIR / "program"
 sys.path.append(str(program_path))
 
 try:
-    from calculateSpeed import calculate
+    import calculateSpeed
 except ImportError:
     sys.exit(1)
 
@@ -105,21 +106,18 @@ def main():
         except Exception:
             image_files.sort()
 
+        half_of_image_count = min(21, len(image_files))
+        calculateSpeed.initiate_stability_mask(half_of_image_count)
+        for i in range(half_of_image_count):
+            calculateSpeed.add_to_mask(cv2.imread(image_files[i], 0))
+
         results = []
-        for i in range(len(image_files) - 1):
-            img1 = image_files[i]
-            img2 = image_files[i + 1]
-
-            # Get exact time for API lookup
-            img2_time = get_time(img2)
+        def process_image_pair(img1, img2):
             time_difference = get_time_difference(img1, img2)
-
             try:
-                # Replace constants with historical API data
-                iss_latitude, iss_altitude = get_historical_iss_position(img2_time)
-
+                iss_latitude, iss_altitude = get_historical_iss_position(get_time(img2))
                 if iss_latitude is not None:
-                    speed, inliers = calculate(img1, img2, time_difference, iss_altitude, iss_latitude)
+                    speed, inliers = calculateSpeed.calculate(img1, img2, time_difference, iss_altitude, iss_latitude)
                 else:
                     raise ValueError("Could not retrieve ISS data from API")
 
@@ -135,6 +133,15 @@ def main():
                     "confidence": inliers
                 })
                 all_speed_values.append(speed)
+
+        for i in range(half_of_image_count, len(image_files), 1):
+            img1 = image_files[i - half_of_image_count]
+            img2 = image_files[i - half_of_image_count + 1]
+            process_image_pair(img1, img2)
+
+            img1 = image_files[i - 1]
+            img2 = image_files[i]
+            process_image_pair(img1, img2)
 
         if not results:
             print("No valid matches found.")

@@ -1,12 +1,45 @@
 import math
 import os
+from collections import deque
+import time
+
 import numpy as np
 import cv2
 
-def convert_to_cv(image_1, image_2):
-    image_1_cv = cv2.imread(image_1, 0)
-    image_2_cv = cv2.imread(image_2, 0)
-    return image_1_cv, image_2_cv
+frame_buffer = deque(maxlen=21)
+size = 21
+
+def initiate_stability_mask(length):
+    global size
+    size = length
+    global frame_buffer
+    frame_buffer = deque(maxlen=length)
+
+def add_to_mask(image):
+    frame_buffer.append(image.astype(np.int16))
+
+def get_stability_mask(new_frame):
+    if len(frame_buffer) < size:
+        print("Something went wrong, not using stability mask")
+        return np.ones(new_frame.shape, dtype=np.uint8) * 255
+
+    max_vals = np.max(frame_buffer, axis=0)
+    min_vals = np.min(frame_buffer, axis=0)
+    diff_stack = max_vals - min_vals
+
+    stability_mask = np.where(diff_stack > 30, 255, 0).astype(np.uint8)
+
+    return stability_mask
+
+def delete_small_dots(mask, min_area=6000):
+    inverted_mask = cv2.bitwise_not(mask)
+
+    contours, _ = cv2.findContours(inverted_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    for cnt in contours:
+        if cv2.contourArea(cnt) < min_area:
+            cv2.drawContours(inverted_mask, [cnt], -1, 0, -1)
+
+    return cv2.bitwise_not(inverted_mask)
 
 def shift_mask(mask, shift_x, shift_y):
     rows, cols = mask.shape[:2]
@@ -51,11 +84,8 @@ def grid_calculate_features(image, mask, feature_number=2000, grid_size=(2, 2)):
     return all_kp, descriptors
 
 def calculate_features(image_1, image_2, feature_number):
-
-    diff = cv2.absdiff(image_1, image_2)
-    _, motion_mask = cv2.threshold(diff, 10, 255, cv2.THRESH_BINARY)
-    kernel = np.ones((5, 5), np.uint8)
-    motion_mask = cv2.morphologyEx(motion_mask, cv2.MORPH_OPEN, kernel)
+    motion_mask = get_stability_mask(image_2)
+    motion_mask = delete_small_dots(motion_mask)
 
     # First coarse search
     kp_c1, des_c1 = grid_calculate_features(image_1, motion_mask)
@@ -166,8 +196,8 @@ def calculate_speed_in_kmps(feature_distance, gsd, time_difference, iss_altitude
 
 
 def calculate(image_1, image_2, time_difference, iss_altitude, latitude):
-    img1_cv, img2_cv = convert_to_cv(image_1, image_2)
-
+    img1_cv = cv2.imread(image_1, 0)
+    img2_cv = cv2.imread(image_2, 0)
     keypoints_1, keypoints_2, descriptors_1, descriptors_2 = calculate_features(img1_cv, img2_cv, 1000)
 
     matches = calculate_matches(descriptors_1, descriptors_2)
