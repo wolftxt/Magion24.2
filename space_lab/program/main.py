@@ -1,9 +1,10 @@
+import cv2
 from picamzero import Camera
 from astro_pi_orbit import ISS
 import time
 
 from writeResult import write_result
-from calculateSpeed import calculate
+import calculateSpeed
 
 TIME_INTERVAL = 13
 IMAGE_COUNT = 42
@@ -17,14 +18,30 @@ def capture_images():
     images = []
     timestamps = []
 
-    for i in range(IMAGE_COUNT):
+    def process_image_pair(img1, img2, i):
+        time_diff = timestamps[i] - timestamps[i - 1]
+
+        try:
+            iss_altitude = ISS().coordinates().elevation.m
+            iss_latitude = ISS().coordinates().latitude.degrees
+            speed, inliers = calculateSpeed.calculate(img1, img2, time_diff, iss_altitude, iss_latitude)
+
+            results.append({
+                "speed": speed,
+                "confidence": inliers
+            })
+        except Exception as e:
+            print(f"Calculation error at index {i}: {e}")
+
+    half_of_image_count = min(21, IMAGE_COUNT)
+    calculateSpeed.initiate_stability_mask(half_of_image_count)
+
+    for i in range(half_of_image_count):
         if time.perf_counter() - start_time > MAX_TIME_ELAPSED:
             print("Time limit reached. Breaking loop.")
             break
-
         cycle_start = time.perf_counter()
 
-        # 1. Capture timing
         image_path = f"image{i}.jpg"
         cam.take_photo(image_path)
         capture_end = time.perf_counter()
@@ -32,22 +49,37 @@ def capture_images():
         images.append(image_path)
         timestamps.append(capture_end)
 
-        if i > 0:
-            img1 = images[i - 1]
-            img2 = images[i]
-            time_diff = timestamps[i] - timestamps[i - 1]
+        calculateSpeed.add_to_mask(cv2.imread(images[i], 0))
 
-            try:
-                iss_altitude = ISS().coordinates().elevation.m
-                iss_latitude = ISS().coordinates().latitude.degrees
-                speed, inliers = calculate(img1, img2, time_diff, iss_altitude, iss_latitude)
+        elapsed_in_cycle = time.perf_counter() - cycle_start
+        sleep_time = max(0, TIME_INTERVAL - elapsed_in_cycle)
 
-                results.append({
-                    "speed": speed,
-                    "confidence": inliers
-                })
-            except Exception as e:
-                print(f"Calculation error at index {i}: {e}")
+        if elapsed_in_cycle > TIME_INTERVAL:
+            print(f"WARNING: Cycle {i} exceeded TIME_INTERVAL! Timing may be drifting.")
+
+        time.sleep(sleep_time)
+
+    for i in range(half_of_image_count, IMAGE_COUNT, 1):
+        if time.perf_counter() - start_time > MAX_TIME_ELAPSED:
+            print("Time limit reached. Breaking loop.")
+            break
+
+        cycle_start = time.perf_counter()
+
+        img1 = images[i - half_of_image_count]
+        img2 = images[i - half_of_image_count + 1]
+        process_image_pair(img1, img2, i - half_of_image_count + 1)
+
+        image_path = f"image{i}.jpg"
+        cam.take_photo(image_path)
+        capture_end = time.perf_counter()
+
+        images.append(image_path)
+        timestamps.append(capture_end)
+
+        img1 = images[i - 1]
+        img2 = images[i]
+        process_image_pair(img1, img2, i)
 
         elapsed_in_cycle = time.perf_counter() - cycle_start
         sleep_time = max(0, TIME_INTERVAL - elapsed_in_cycle)
