@@ -1,26 +1,35 @@
 import math
 import os
 from collections import deque
+import time
 
 import numpy as np
 import cv2
 
 frame_buffer = deque(maxlen=21)
 size = 21
+current_stability_mask = None
 
 def initiate_stability_mask(length):
     global size
     size = length
     global frame_buffer
     frame_buffer = deque(maxlen=length)
+    global current_stability_mask
+    current_stability_mask = None
 
 def add_to_mask(image):
     frame_buffer.append(image.astype(np.int16))
+    if len(frame_buffer) == size:
+        global current_stability_mask
+        current_stability_mask = get_stability_mask()
 
-def get_stability_mask(new_frame):
+def get_stability_mask():
+    if current_stability_mask is not None:
+        return current_stability_mask
     if len(frame_buffer) < size:
         print("Something went wrong, not using stability mask")
-        return np.ones(new_frame.shape, dtype=np.uint8) * 255
+        return None
 
     max_vals = np.max(frame_buffer, axis=0)
     min_vals = np.min(frame_buffer, axis=0)
@@ -28,7 +37,7 @@ def get_stability_mask(new_frame):
 
     stability_mask = np.where(diff_stack > 28, 255, 0).astype(np.uint8)
 
-    return stability_mask
+    return delete_small_dots(stability_mask)
 
 def delete_small_dots(mask, min_area=6000):
     inverted_mask = cv2.bitwise_not(mask)
@@ -84,8 +93,7 @@ def grid_calculate_features(image, mask, feature_number=2000, grid_size=(2, 2)):
     return all_kp, descriptors
 
 def calculate_features(image_1, image_2, feature_number):
-    motion_mask = get_stability_mask(image_2)
-    motion_mask = delete_small_dots(motion_mask)
+    motion_mask = get_stability_mask()
 
     # First coarse search
     kp_c1, des_c1 = grid_calculate_features(image_1, motion_mask)
