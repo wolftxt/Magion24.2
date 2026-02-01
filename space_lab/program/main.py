@@ -2,16 +2,14 @@ from picamzero import Camera
 from astro_pi_orbit import ISS
 import time
 
-
 from writeResult import write_result
 from calculateSpeed import calculate
 
-# Configuration
 TIME_INTERVAL = 13
 IMAGE_COUNT = 42
 MAX_TIME_ELAPSED = 570  # 9.5 minutes
 
-start_time = time.time()
+start_time = time.perf_counter()
 
 def capture_images():
     cam = Camera()
@@ -20,33 +18,29 @@ def capture_images():
     timestamps = []
 
     for i in range(IMAGE_COUNT):
-        if time.time() - start_time > MAX_TIME_ELAPSED:
+        if time.perf_counter() - start_time > MAX_TIME_ELAPSED:
             print("Time limit reached. Breaking loop.")
             break
 
-        cycle_start = time.time()
+        cycle_start = time.perf_counter()
 
         # 1. Capture timing
         image_path = f"image{i}.jpg"
-        capture_start = time.time()
         cam.take_photo(image_path)
-        capture_end = time.time()
+        capture_end = time.perf_counter()
 
         images.append(image_path)
         timestamps.append(capture_end)
 
-        # 2. Calculation timing
         if i > 0:
             img1 = images[i - 1]
             img2 = images[i]
             time_diff = timestamps[i] - timestamps[i - 1]
 
-            calc_start = time.time()
             try:
                 iss_altitude = ISS().coordinates().elevation.m
                 iss_latitude = ISS().coordinates().latitude.degrees
                 speed, inliers = calculate(img1, img2, time_diff, iss_altitude, iss_latitude)
-                calc_end = time.time()
 
                 results.append({
                     "speed": speed,
@@ -55,8 +49,7 @@ def capture_images():
             except Exception as e:
                 print(f"Calculation error at index {i}: {e}")
 
-        # 3. Sleep timing
-        elapsed_in_cycle = time.time() - cycle_start
+        elapsed_in_cycle = time.perf_counter() - cycle_start
         sleep_time = max(0, TIME_INTERVAL - elapsed_in_cycle)
 
         if elapsed_in_cycle > TIME_INTERVAL:
@@ -64,7 +57,6 @@ def capture_images():
 
         time.sleep(sleep_time)
 
-    # --- Filtering Logic ---
     if not results:
         print("No results collected.")
         return 0
