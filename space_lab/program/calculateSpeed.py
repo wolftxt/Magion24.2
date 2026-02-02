@@ -208,12 +208,10 @@ def calculate(image_1, image_2, time_difference, iss_altitude, latitude):
 
     matches = calculate_matches(descriptors_1, descriptors_2)
 
-    # Apply RANSAC
     src_pts = np.float32([keypoints_1[m.queryIdx].pt for m in matches]).reshape(-1, 1, 2)
     dst_pts = np.float32([keypoints_2[m.trainIdx].pt for m in matches]).reshape(-1, 1, 2)
 
-    # M is the matrix, mask identifies inliers
-    M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
+    M, mask = cv2.estimateAffinePartial2D(src_pts, dst_pts, method=cv2.RANSAC, ransacReprojThreshold=5.0)
 
     inliers_count = np.sum(mask)
     matches_mask = mask.flatten().tolist()

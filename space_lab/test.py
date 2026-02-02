@@ -115,7 +115,7 @@ def main():
         def process_image_pair(img1, img2):
             time_difference = get_time_difference(img1, img2)
             try:
-                iss_latitude, iss_altitude = get_historical_iss_position(get_time(img2))
+                iss_latitude, iss_altitude = get_historical_iss_position(get_time(img1))
                 if iss_latitude is not None:
                     speed, inliers = calculateSpeed.calculate(img1, img2, time_difference, iss_altitude, iss_latitude)
                 else:
