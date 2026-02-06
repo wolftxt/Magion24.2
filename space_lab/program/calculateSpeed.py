@@ -1,12 +1,13 @@
 import math
 import os
-from collections import deque
 import time
+from collections import deque
 
 import numpy as np
 import cv2
 
 frame_buffer = deque(maxlen=21)
+edge_buffer = deque(maxlen=21)
 size = 21
 current_stability_mask = None
 
@@ -20,33 +21,47 @@ def initiate_stability_mask(length):
 
 def add_to_mask(image):
     frame_buffer.append(image.astype(np.int16))
-    if len(frame_buffer) == size:
+
+    grad_x = cv2.Sobel(image, cv2.CV_32F, 1, 0, ksize=5)
+    grad_y = cv2.Sobel(image, cv2.CV_32F, 0, 1, ksize=5)
+    edge_mag = cv2.magnitude(grad_x, grad_y)
+
+    edge_buffer.append(edge_mag)
+
+    if len(edge_buffer) == size:
         global current_stability_mask
+        t = time.perf_counter()
         current_stability_mask = get_stability_mask()
+        print(time.perf_counter() - t)
 
 def get_stability_mask():
     if current_stability_mask is not None:
         return current_stability_mask
-    if len(frame_buffer) < size:
-        print("Something went wrong, not using stability mask")
+    if len(edge_buffer) < size:
         return None
 
-    max_vals = np.max(frame_buffer, axis=0)
-    min_vals = np.min(frame_buffer, axis=0)
-    diff_stack = max_vals - min_vals
+    edge_stack = np.array(edge_buffer)
+    edge_variance = np.median(edge_stack, axis=0)
 
-    stability_mask = np.where(diff_stack > 28, 255, 0).astype(np.uint8)
+    frame_stack = np.array(frame_buffer)
+    median_intensity = np.median(frame_stack, axis=0)
+
+    edge_threshold = 200
+    color_threshold = 100
+
+    mask_condition = (edge_variance < edge_threshold) & (median_intensity >= color_threshold)
+
+    stability_mask = np.where(mask_condition, 255, 0).astype(np.uint8)
 
     return delete_small_dots(stability_mask)
 
 def delete_small_dots(mask, min_area=6000):
     inverted_mask = cv2.bitwise_not(mask)
-
-    contours, _ = cv2.findContours(inverted_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours, _ = cv2.findContours(inverted_mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
     for cnt in contours:
-        if cv2.contourArea(cnt) < min_area:
+        area = cv2.contourArea(cnt)
+        if area < min_area:
             cv2.drawContours(inverted_mask, [cnt], -1, 0, -1)
-
     return cv2.bitwise_not(inverted_mask)
 
 def shift_mask(mask, shift_x, shift_y):
@@ -54,7 +69,6 @@ def shift_mask(mask, shift_x, shift_y):
     M = np.float32([[1, 0, shift_x], [0, 1, shift_y]])
     shifted_mask = cv2.warpAffine(mask, M, (cols, rows))
     return shifted_mask
-
 
 def grid_calculate_features(image, mask, feature_number=2000, grid_size=(2, 2)):
     h, w = image.shape
@@ -64,8 +78,8 @@ def grid_calculate_features(image, mask, feature_number=2000, grid_size=(2, 2)):
     orb = cv2.ORB_create(nfeatures=feature_number,
                          scaleFactor=1.2,
                          nlevels=8,
-                         edgeThreshold=20,
-                         patchSize=20,
+                         edgeThreshold=40,
+                         patchSize=40,
                          fastThreshold=5
                          )
     all_kp = []
