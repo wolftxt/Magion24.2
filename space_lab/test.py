@@ -9,6 +9,7 @@ import json
 from glob import glob
 from pathlib import Path
 import statistics
+import math
 
 BASE_DIR = Path(__file__).resolve().parent
 program_path = BASE_DIR / "program"
@@ -90,6 +91,7 @@ def main():
 
     all_subfolder_averages = []
     all_speed_values = []
+    all_expected_stdevs = []  # Track errors globally
 
     for image_dir in subfolders:
         folder_name = os.path.basename(image_dir)
@@ -115,6 +117,8 @@ def main():
             calculateSpeed.add_to_mask(image, False)
 
         results = []
+        folder_expected_stdevs = []  # Track errors per folder
+
         def process_image_pair(image_1, image_2):
             time_difference = get_time_difference(image_1, image_2)
             if time_difference < 12 or time_difference > 30:
@@ -132,10 +136,12 @@ def main():
                 inliers = 0
 
             if speed != -1:
+                expected_err = speed * (math.sqrt(1 / 6) / time_difference)
                 results.append({
                     "name": os.path.basename(image_1),
                     "speed": speed,
-                    "confidence": inliers
+                    "confidence": inliers,
+                    "expected_err": expected_err
                 })
                 all_speed_values.append(speed)
 
@@ -156,6 +162,11 @@ def main():
         all_raw_speeds = [res["speed"] for res in results]
         stdev_of_all_speeds = statistics.stdev(all_raw_speeds) if len(all_raw_speeds) > 1 else 0
 
+        # Collect expected errors for folder statistics
+        for res in results:
+            folder_expected_stdevs.append(res["expected_err"])
+            all_expected_stdevs.append(res["expected_err"])
+
         # Filter for best results (top 25%)
         results.sort(key=lambda x: x["confidence"], reverse=True)
         top_n = max(1, len(results) // 4)
@@ -171,9 +182,13 @@ def main():
 
         if folder_speeds:
             folder_avg = sum(folder_speeds) / len(folder_speeds)
+            # Calculate folder expected stdev (average of the errors)
+            expected_folder_stdev = sum(folder_expected_stdevs) / len(folder_expected_stdevs)
+
             print("-" * 60)
             print(f"Final Filtered Average Speed for {folder_name}: {folder_avg:.5g} km/s")
             print(f"Standard deviation for all images in {folder_name}: {stdev_of_all_speeds:.5g} km/s")
+            print(f"Expected standard deviation: {expected_folder_stdev:.5g} km/s")
             all_subfolder_averages.append(folder_avg)
         print("=" * 60)
 
@@ -182,12 +197,15 @@ def main():
         stdev_of_all_images = statistics.stdev(all_speed_values) if len(all_speed_values) > 1 else 0
         grand_average = statistics.mean(all_subfolder_averages)
         stdev = statistics.stdev(all_subfolder_averages) if len(all_subfolder_averages) > 1 else 0.0
+        # Final expected stdev for all images
+        grand_expected_stdev = sum(all_expected_stdevs) / len(all_expected_stdevs) if all_expected_stdevs else 0
 
         print("\n" + "#" * 60)
         print(f"SUMMARY FOR ALL SUBFOLDERS:")
         print(f"Grand Average Speed: {grand_average:.5g} km/s")
         print(f"Standard Deviation:  {stdev:.5g} km/s")
         print(f"Standard Deviation of all images:  {stdev_of_all_images:.5g} km/s")
+        print(f"Expected standard deviation for all images: {grand_expected_stdev:.5g} km/s")
         print("#" * 60)
 
 
