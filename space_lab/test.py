@@ -112,7 +112,7 @@ def main():
             if i == 0:
                 shape = image.shape
                 calculateSpeed.initiate_stability_mask(half_of_image_count, shape[0], shape[1])
-            calculateSpeed.add_to_mask(image)
+            calculateSpeed.add_to_mask(image, False)
 
         results = []
         def process_image_pair(image_1, image_2):

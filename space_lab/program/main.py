@@ -49,7 +49,7 @@ def capture_images():
         images.append(image_path)
         timestamps.append(capture_end)
 
-        calculateSpeed.add_to_mask(cv2.imread(images[i], 0))
+        calculateSpeed.add_to_mask(cv2.imread(images[i], 0), True)
 
         elapsed_in_cycle = time.perf_counter() - cycle_start
         sleep_time = max(0, TIME_INTERVAL - elapsed_in_cycle)

@@ -9,7 +9,6 @@ size = 21
 current_index = 0
 current_stability_mask = None
 
-
 def initiate_stability_mask(length, img_height, img_width):
     global size, frame_stack, edge_stack, current_index, current_stability_mask
     size = length
@@ -19,7 +18,7 @@ def initiate_stability_mask(length, img_height, img_width):
     frame_stack = np.empty((size, img_height, img_width), dtype=np.uint8)
     edge_stack = np.empty((size, img_height, img_width), dtype=np.float32)
 
-def add_to_mask(image):
+def add_to_mask(image, sort):
     global frame_stack, edge_stack, current_index, current_stability_mask
 
     frame_stack[current_index] = image.astype(np.uint8)
@@ -31,16 +30,14 @@ def add_to_mask(image):
 
     current_index += 1
 
-    if current_index > 1:
-        t = time.perf_counter()
+    if 1 < current_index < size and sort:
         frame_stack[:current_index].sort(axis=0)
         edge_stack[:current_index].sort(axis=0)
-        print(time.perf_counter() - t)
 
     if current_index == size:
+        frame_stack[:current_index].sort(axis=0)
+        edge_stack[:current_index].sort(axis=0)
         current_stability_mask = get_stability_mask()
-        cv2.imshow('stability mask', current_stability_mask)
-        cv2.waitKey(0)
 
 def get_stability_mask():
     global current_stability_mask
