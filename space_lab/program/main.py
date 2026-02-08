@@ -34,7 +34,7 @@ def capture_images():
             print(f"Calculation error at index {i}: {e}")
 
     half_of_image_count = IMAGE_COUNT // 2
-    calculateSpeed.initiate_stability_mask(half_of_image_count)
+    calculateSpeed.initiate_stability_mask(half_of_image_count, 3040, 4056)
 
     for i in range(half_of_image_count):
         if time.perf_counter() - start_time > MAX_TIME_ELAPSED:

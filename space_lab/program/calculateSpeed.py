@@ -1,55 +1,64 @@
 import math
-import os
-from collections import deque
-
+import time
 import numpy as np
 import cv2
 
-frame_buffer = deque(maxlen=21)
-edge_buffer = deque(maxlen=21)
+frame_stack = None
+edge_stack = None
 size = 21
+current_index = 0
 current_stability_mask = None
 
-def initiate_stability_mask(length):
-    global size
+
+def initiate_stability_mask(length, img_height, img_width):
+    global size, frame_stack, edge_stack, current_index, current_stability_mask
     size = length
-    global frame_buffer
-    frame_buffer = deque(maxlen=length)
-    global edge_buffer
-    edge_buffer = deque(maxlen=21)
-    global current_stability_mask
+    current_index = 0
     current_stability_mask = None
 
+    frame_stack = np.empty((size, img_height, img_width), dtype=np.uint8)
+    edge_stack = np.empty((size, img_height, img_width), dtype=np.float32)
+
 def add_to_mask(image):
-    frame_buffer.append(image.astype(np.int16))
+    global frame_stack, edge_stack, current_index, current_stability_mask
+
+    frame_stack[current_index] = image.astype(np.uint8)
 
     grad_x = cv2.Sobel(image, cv2.CV_32F, 1, 0, ksize=5)
     grad_y = cv2.Sobel(image, cv2.CV_32F, 0, 1, ksize=5)
     edge_mag = cv2.magnitude(grad_x, grad_y)
+    edge_stack[current_index] = edge_mag
 
-    edge_buffer.append(edge_mag)
+    current_index += 1
 
-    if len(edge_buffer) == size:
-        global current_stability_mask
+    if current_index > 1:
+        t = time.perf_counter()
+        frame_stack[:current_index].sort(axis=0)
+        edge_stack[:current_index].sort(axis=0)
+        print(time.perf_counter() - t)
+
+    if current_index == size:
         current_stability_mask = get_stability_mask()
+        cv2.imshow('stability mask', current_stability_mask)
+        cv2.waitKey(0)
 
 def get_stability_mask():
+    global current_stability_mask
+
     if current_stability_mask is not None:
         return current_stability_mask
-    if len(edge_buffer) < size:
+
+    if current_index < size:
         return None
 
-    edge_stack = np.array(edge_buffer)
-    edge_variance = np.median(edge_stack, axis=0)
-
-    frame_stack = np.array(frame_buffer)
-    median_intensity = np.median(frame_stack, axis=0)
+    median_idx = size // 2
+    edge_variance = edge_stack[median_idx]
+    median_intensity = frame_stack[median_idx]
 
     edge_threshold = 200
     color_threshold = 100
 
     mask_condition = (edge_variance < edge_threshold) & (median_intensity >= color_threshold)
-
     stability_mask = np.where(mask_condition, 255, 0).astype(np.uint8)
 
     return delete_small_dots(stability_mask)
@@ -62,6 +71,7 @@ def delete_small_dots(mask, min_area=1000):
         if area < min_area:
             cv2.drawContours(inverted_mask, [cnt], -1, 0, -1)
     return cv2.bitwise_not(inverted_mask)
+
 
 def shift_mask(mask, shift_x, shift_y):
     rows, cols = mask.shape[:2]
@@ -100,7 +110,7 @@ def grid_calculate_features(image, mask, feature_number=2000, grid_size=(2, 2)):
                 all_kp.extend(kp)
                 all_des.append(des)
 
-    # Re-stack descriptors into a single numpy array
+                # Re-stack descriptors into a single numpy array
     import numpy as np
     descriptors = np.vstack(all_des) if all_des else None
     return all_kp, descriptors
@@ -242,7 +252,7 @@ def calculate(image_1, image_2, time_difference, iss_altitude, latitude):
     GSD = (iss_altitude * sensor_width_mm) / (focal_length_mm * image_width_px)
     speed = calculate_speed_in_kmps(average_feature_distance, GSD, time_difference, iss_altitude, latitude)
 
-    print(f"speed: {speed:.5g} km/h, inliers: {inliers_count}, image name: {os.path.basename(image_2)}")
+    print(f"speed: {speed:.5g} km/h, inliers: {inliers_count}, image name: {image_2}")
 
     """h1, w1 = img1_cv.shape
     h2, w2 = img2_cv.shape

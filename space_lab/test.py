@@ -107,9 +107,12 @@ def main():
             image_files.sort()
 
         half_of_image_count = min(21, len(image_files))
-        calculateSpeed.initiate_stability_mask(half_of_image_count)
         for i in range(half_of_image_count):
-            calculateSpeed.add_to_mask(cv2.imread(image_files[i], 0))
+            image = cv2.imread(image_files[i], 0)
+            if i == 0:
+                shape = image.shape
+                calculateSpeed.initiate_stability_mask(half_of_image_count, shape[0], shape[1])
+            calculateSpeed.add_to_mask(image)
 
         results = []
         def process_image_pair(image_1, image_2):
