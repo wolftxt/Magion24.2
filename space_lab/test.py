@@ -112,25 +112,25 @@ def main():
             calculateSpeed.add_to_mask(cv2.imread(image_files[i], 0))
 
         results = []
-        def process_image_pair(img1, img2):
-            time_difference = get_time_difference(img1, img2)
-            if time_difference < 12:
+        def process_image_pair(image_1, image_2):
+            time_difference = get_time_difference(image_1, image_2)
+            if time_difference < 12 or time_difference > 30:
                 return
             try:
-                iss_latitude, iss_altitude = get_historical_iss_position(get_time(img1))
+                iss_latitude, iss_altitude = get_historical_iss_position(get_time(image_1))
                 if iss_latitude is not None:
-                    speed, inliers = calculateSpeed.calculate(img1, img2, time_difference, iss_altitude, iss_latitude)
+                    speed, inliers = calculateSpeed.calculate(image_1, image_2, time_difference, iss_altitude, iss_latitude)
                 else:
                     raise ValueError("Could not retrieve ISS data from API")
 
             except Exception as e:
-                print(f"Error processing {os.path.basename(img2)}: {e}")
+                print(f"Error processing {os.path.basename(image_1)}: {e}")
                 speed = -1
                 inliers = 0
 
             if speed != -1:
                 results.append({
-                    "name": os.path.basename(img2),
+                    "name": os.path.basename(image_1),
                     "speed": speed,
                     "confidence": inliers
                 })
