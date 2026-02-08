@@ -1,6 +1,5 @@
 import math
 import os
-import time
 from collections import deque
 
 import numpy as np
@@ -16,6 +15,8 @@ def initiate_stability_mask(length):
     size = length
     global frame_buffer
     frame_buffer = deque(maxlen=length)
+    global edge_buffer
+    edge_buffer = deque(maxlen=21)
     global current_stability_mask
     current_stability_mask = None
 
@@ -30,9 +31,7 @@ def add_to_mask(image):
 
     if len(edge_buffer) == size:
         global current_stability_mask
-        t = time.perf_counter()
         current_stability_mask = get_stability_mask()
-        print(time.perf_counter() - t)
 
 def get_stability_mask():
     if current_stability_mask is not None:
@@ -55,7 +54,7 @@ def get_stability_mask():
 
     return delete_small_dots(stability_mask)
 
-def delete_small_dots(mask, min_area=6000):
+def delete_small_dots(mask, min_area=1000):
     inverted_mask = cv2.bitwise_not(mask)
     contours, _ = cv2.findContours(inverted_mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
     for cnt in contours:
@@ -235,7 +234,9 @@ def calculate(image_1, image_2, time_difference, iss_altitude, latitude):
     coordinates_1, coordinates_2 = find_matching_coordinates(keypoints_1, keypoints_2, ransac_matches)
     average_feature_distance = calculate_mean_distance(coordinates_1, coordinates_2)
 
-    image_width_px = 4056
+    shape = img1_cv.shape
+
+    image_width_px = shape[1]
     focal_length_mm = 5.0
     sensor_width_mm = 6.287
     GSD = (iss_altitude * sensor_width_mm) / (focal_length_mm * image_width_px)

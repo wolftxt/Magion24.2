@@ -114,6 +114,8 @@ def main():
         results = []
         def process_image_pair(img1, img2):
             time_difference = get_time_difference(img1, img2)
+            if time_difference < 12:
+                return
             try:
                 iss_latitude, iss_altitude = get_historical_iss_position(get_time(img1))
                 if iss_latitude is not None:
