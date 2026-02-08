@@ -33,7 +33,7 @@ def capture_images():
         except Exception as e:
             print(f"Calculation error at index {i}: {e}")
 
-    half_of_image_count = min(21, IMAGE_COUNT)
+    half_of_image_count = IMAGE_COUNT // 2
     calculateSpeed.initiate_stability_mask(half_of_image_count)
 
     for i in range(half_of_image_count):
@@ -66,9 +66,10 @@ def capture_images():
 
         cycle_start = time.perf_counter()
 
-        img1 = images[i - half_of_image_count]
-        img2 = images[i - half_of_image_count + 1]
-        process_image_pair(img1, img2, i - half_of_image_count + 1)
+        if i - half_of_image_count < half_of_image_count:
+            img1 = images[i - half_of_image_count]
+            img2 = images[i - half_of_image_count + 1]
+            process_image_pair(img1, img2, i - half_of_image_count + 1)
 
         image_path = f"image{i}.jpg"
         cam.take_photo(image_path)

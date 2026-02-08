@@ -137,9 +137,10 @@ def main():
                 all_speed_values.append(speed)
 
         for i in range(half_of_image_count, len(image_files), 1):
-            img1 = image_files[i - half_of_image_count]
-            img2 = image_files[i - half_of_image_count + 1]
-            process_image_pair(img1, img2)
+            if i - half_of_image_count < half_of_image_count:
+                img1 = image_files[i - half_of_image_count]
+                img2 = image_files[i - half_of_image_count + 1]
+                process_image_pair(img1, img2)
 
             img1 = image_files[i - 1]
             img2 = image_files[i]
