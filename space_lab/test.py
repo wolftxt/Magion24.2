@@ -121,19 +121,19 @@ def main():
 
         def process_image_pair(image_1, image_2):
             time_difference = get_time_difference(image_1, image_2)
-            if time_difference < 12 or time_difference > 30:
+            if time_difference < 10 or time_difference > 30:
                 return
-            try:
-                iss_latitude, iss_altitude = get_historical_iss_position(get_time(image_1))
-                if iss_latitude is not None:
-                    speed, inliers = calculateSpeed.calculate(image_1, image_2, time_difference, iss_altitude, iss_latitude)
-                else:
-                    raise ValueError("Could not retrieve ISS data from API")
+            #try:
+            iss_latitude, iss_altitude = get_historical_iss_position(get_time(image_1))
+            if iss_latitude is not None:
+                speed, inliers = calculateSpeed.calculate(image_1, image_2, time_difference, iss_altitude, iss_latitude)
+            else:
+                raise ValueError("Could not retrieve ISS data from API")
 
-            except Exception as e:
+            """except Exception as e:
                 print(f"Error processing {os.path.basename(image_1)}: {e}")
                 speed = -1
-                inliers = 0
+                inliers = 0"""
 
             if speed != -1:
                 expected_err = speed * (math.sqrt(1 / 6) / time_difference)
@@ -167,29 +167,32 @@ def main():
             folder_expected_stdevs.append(res["expected_err"])
             all_expected_stdevs.append(res["expected_err"])
 
-        # Filter for best results (top 25%)
         results.sort(key=lambda x: x["confidence"], reverse=True)
-        top_n = max(1, len(results) // 4)
-        best_results = results[:top_n]
 
         print(f"{'Image Name':<30} | {'Speed (km/s)':<15} | {'Inliers'}")
         print("-" * 60)
 
-        folder_speeds = []
-        for res in best_results:
-            print(f"{res['name']:<30} | {res['speed']:.5g} km/s   | {res['confidence']}")
-            folder_speeds.append(res["speed"])
+        best_results = []
+        for res in results:
+            if res["confidence"] >= 100:
+                print(f"{res['name']:<30} | {res['speed']:.5g} km/s   | {res['confidence']}")
+                best_results.append(res["speed"])
+        if len(best_results) == 0:
+            for res in results:
+                print(f"{res['name']:<30} | {res['speed']:.5g} km/s   | {res['confidence']}")
+                best_results.append(res["speed"])
 
-        if folder_speeds:
-            folder_avg = sum(folder_speeds) / len(folder_speeds)
-            # Calculate folder expected stdev (average of the errors)
+        if best_results:
+            folder_avg = sum(best_results) / len(best_results)
             expected_folder_stdev = sum(folder_expected_stdevs) / len(folder_expected_stdevs)
 
             print("-" * 60)
+            print(f"Best Image Count: {len(best_results)}")
             print(f"Final Filtered Average Speed for {folder_name}: {folder_avg:.5g} km/s")
             print(f"Standard deviation for all images in {folder_name}: {stdev_of_all_speeds:.5g} km/s")
             print(f"Expected standard deviation: {expected_folder_stdev:.5g} km/s")
-            all_subfolder_averages.append(folder_avg)
+            if len(best_results) >= 10:
+                all_subfolder_averages.append(folder_avg)
         print("=" * 60)
 
     # --- Final Calculations ---
