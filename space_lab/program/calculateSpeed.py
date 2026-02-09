@@ -1,9 +1,6 @@
 import math
-import time
 import numpy as np
 import cv2
-from flatbuffers.packer import float64
-from pandas.core.interchange.from_dataframe import primitive_column_to_ndarray
 
 frame_stack = None
 edge_stack = None
@@ -216,7 +213,9 @@ def calculate_speed_in_kmps(distance_angle, time_difference, iss_altitude, latit
     seconds_in_a_day = 86164.09
     earth_rotation_degrees = 2 * math.pi / seconds_in_a_day * math.cos(lat_rad)
     d_r = earth_rotation_degrees * time_difference
-    angle = math.pi / 2 + math.asin(math.cos(inclination) / math.cos(lat_rad))
+    # Ternary to avoid math domain error
+    azimuth = 1 if math.cos(inclination) / math.cos(lat_rad) > 1 else math.cos(inclination) / math.cos(lat_rad)
+    angle = math.pi / 2 + math.asin(azimuth)
 
     d_g = distance_angle
     d_g_and_r = math.acos(math.cos(d_g) * math.cos(d_r) + math.sin(d_g) * math.sin(d_r) * math.cos(angle))
