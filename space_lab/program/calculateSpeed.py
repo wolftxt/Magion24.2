@@ -2,6 +2,8 @@ import math
 import time
 import numpy as np
 import cv2
+from flatbuffers.packer import float64
+from pandas.core.interchange.from_dataframe import primitive_column_to_ndarray
 
 frame_stack = None
 edge_stack = None
@@ -166,28 +168,34 @@ def find_matching_coordinates(keypoints_1, keypoints_2, matches):
     return coordinates_1, coordinates_2
 
 
-def calculate_mean_distance(coordinates_1, coordinates_2):
+def calculate_mean_distance(coordinates_1, coordinates_2, shape, h, latitude, GSD):
     if not coordinates_1:
         return 0
 
-    sum_dx = 0
-    sum_dy = 0
     count = len(coordinates_1)
+    distance_angles = np.empty(count, dtype=np.float64)
 
+    r = get_earth_radius(latitude)
+    nadir = [shape[1] / 2, shape[0] / 2]
     for i in range(count):
-        dx = coordinates_2[i][0] - coordinates_1[i][0]
-        dy = coordinates_2[i][1] - coordinates_1[i][1]
-        if math.fabs(dx) < 2 and math.fabs(dy) < 2:
-            print("Something went VERY WRONG, the distances are 0.")
-            count -= 1
-            continue
-        sum_dx += dx
-        sum_dy += dy
+        dx = nadir[0] - coordinates_1[i][0]
+        dy = nadir[1] - coordinates_1[i][1]
+        angle_1 = math.atan2(dy, dx)
+        pixel_distance_1 = math.hypot(dx, dy)
+        alpha = math.atan2(pixel_distance_1 * GSD, h)
+        theta = math.asin(math.sin(alpha) * (r + h) / r) - alpha
 
-    mean_dx = sum_dx / count
-    mean_dy = sum_dy / count
+        dx_2 = nadir[0] - coordinates_2[i][0]
+        dy_2 = nadir[1] - coordinates_2[i][1]
+        angle_2 = math.atan2(dy_2, dx_2)
+        pixel_distance_2 = math.hypot(dx_2, dy_2)
+        alpha_2 = math.atan2(pixel_distance_2 * GSD, h)
+        theta_2 = math.asin(math.sin(alpha_2) * (r + h) / r) - alpha_2
 
-    return math.hypot(mean_dx, mean_dy)
+        angle = math.fabs(angle_2 - angle_1)
+        distance_angles[i] = math.acos(math.cos(theta) * math.cos(theta_2) + math.sin(theta) * math.sin(theta_2) * math.cos(angle))
+
+    return np.mean(distance_angles)
 
 def get_earth_radius(latitude):
     a = 6378137  # earth_equator_radius
@@ -200,24 +208,21 @@ def get_earth_radius(latitude):
     return math.sqrt(numerator / denominator)
 
 
-def calculate_speed_in_kmps(feature_distance, gsd, time_difference, iss_altitude, latitude):
+def calculate_speed_in_kmps(distance_angle, time_difference, iss_altitude, latitude):
     inclination = math.radians(51.64)
     lat_rad = math.radians(latitude)
-    d_r = 463.8 * math.cos(lat_rad) * time_difference
-    cos_beta = math.cos(inclination) / math.cos(lat_rad)
-    cos_beta = min(1.0, max(-1.0, cos_beta))
-
-    d_g = (feature_distance * gsd)
-    d_g_and_r = math.sqrt(d_g ** 2 + d_r ** 2 + 2 * d_g * d_r * cos_beta)
-
     earth_radius = get_earth_radius(latitude)
 
-    # Small inefficiency in the assumption that earth is a perfect sphere
-    angle = 2 * math.asin(d_g_and_r / earth_radius / 2)
+    seconds_in_a_day = 86164.09
+    earth_rotation_degrees = 2 * math.pi / seconds_in_a_day * math.cos(lat_rad)
+    d_r = earth_rotation_degrees * time_difference
+    angle = math.pi / 2 + math.asin(math.cos(inclination) / math.cos(lat_rad))
 
-    arc_distance = angle * (earth_radius + iss_altitude)
-    speed_in_mps = arc_distance / time_difference
+    d_g = distance_angle
+    d_g_and_r = math.acos(math.cos(d_g) * math.cos(d_r) + math.sin(d_g) * math.sin(d_r) * math.cos(angle))
 
+    orbit_distance = d_g_and_r * (earth_radius + iss_altitude)
+    speed_in_mps = orbit_distance / time_difference
     return speed_in_mps / 1000
 
 
@@ -239,7 +244,6 @@ def calculate(image_1, image_2, time_difference, iss_altitude, latitude):
 
     # Calculate speed using only RANSAC inliers
     coordinates_1, coordinates_2 = find_matching_coordinates(keypoints_1, keypoints_2, ransac_matches)
-    average_feature_distance = calculate_mean_distance(coordinates_1, coordinates_2)
 
     shape = img1_cv.shape
 
@@ -247,9 +251,10 @@ def calculate(image_1, image_2, time_difference, iss_altitude, latitude):
     focal_length_mm = 5.0
     sensor_width_mm = 6.287
     GSD = (iss_altitude * sensor_width_mm) / (focal_length_mm * image_width_px)
-    speed = calculate_speed_in_kmps(average_feature_distance, GSD, time_difference, iss_altitude, latitude)
+    average_arc_angle = calculate_mean_distance(coordinates_1, coordinates_2, shape, iss_altitude, latitude, GSD)
+    speed = calculate_speed_in_kmps(average_arc_angle, time_difference, iss_altitude, latitude)
 
-    print(f"speed: {speed:.5g} km/h, inliers: {inliers_count}, image name: {image_2}")
+    print(f"speed: {speed:.5g} km/s, inliers: {inliers_count}, image name: {image_2}")
 
     """h1, w1 = img1_cv.shape
     h2, w2 = img2_cv.shape
