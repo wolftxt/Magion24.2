@@ -7,12 +7,16 @@ edge_stack = None
 size = 21
 current_index = 0
 current_stability_mask = None
+x_pixel_shift_per_second = []
+y_pixel_shift_per_second = []
 
 def initiate_stability_mask(length, img_height, img_width):
-    global size, frame_stack, edge_stack, current_index, current_stability_mask
+    global size, frame_stack, edge_stack, current_index, current_stability_mask, x_pixel_shift_per_second, y_pixel_shift_per_second
     size = length
     current_index = 0
     current_stability_mask = None
+    x_pixel_shift_per_second = []
+    y_pixel_shift_per_second = []
 
     frame_stack = np.empty((size, img_height, img_width), dtype=np.uint8)
     edge_stack = np.empty((size, img_height, img_width), dtype=np.float32)
@@ -111,28 +115,18 @@ def grid_calculate_features(image, mask, feature_number=2000, grid_size=(2, 2)):
     descriptors = np.vstack(all_des) if all_des else None
     return all_kp, descriptors
 
-def calculate_features(image_1, image_2, feature_number):
+
+def find_pixel_shift(keypoints_1, keypoints_2, matches):
+    dxs = [keypoints_2[m.trainIdx].pt[0] - keypoints_1[m.queryIdx].pt[0] for m in matches]
+    dys = [keypoints_2[m.trainIdx].pt[1] - keypoints_1[m.queryIdx].pt[1] for m in matches]
+    shift_x, shift_y = np.median(dxs), np.median(dys)
+    return shift_x, shift_y
+
+def calculate_features(image_1, image_2, feature_number, time_difference):
     motion_mask = get_stability_mask()
 
-    # First coarse search
-    kp_c1, des_c1 = grid_calculate_features(image_1, motion_mask)
-    kp_c2, des_c2 = grid_calculate_features(image_2, motion_mask)
-
-    shift_x, shift_y = 0, 0
-    if des_c1 is not None and des_c2 is not None:
-        coarse_matches = calculate_and_filter_matches(kp_c1, kp_c2, des_c1, des_c2)
-
-        src_pts = np.float32([kp_c1[m.queryIdx].pt for m in coarse_matches]).reshape(-1, 1, 2)
-        dst_pts = np.float32([kp_c2[m.trainIdx].pt for m in coarse_matches]).reshape(-1, 1, 2)
-
-        M, mask = cv2.estimateAffinePartial2D(src_pts, dst_pts, method=cv2.RANSAC, ransacReprojThreshold=5.0)
-
-        matches_mask = mask.flatten().tolist()
-        coarse_matches = [m for i, m in enumerate(coarse_matches) if matches_mask[i] == 1]
-
-        dxs = [kp_c2[m.trainIdx].pt[0] - kp_c1[m.queryIdx].pt[0] for m in coarse_matches]
-        dys = [kp_c2[m.trainIdx].pt[1] - kp_c1[m.queryIdx].pt[1] for m in coarse_matches]
-        shift_x, shift_y = np.median(dxs), np.median(dys)
+    shift_x = np.median(x_pixel_shift_per_second) * time_difference if len(x_pixel_shift_per_second) != 0 else 0
+    shift_y = np.median(y_pixel_shift_per_second) * time_difference if len(y_pixel_shift_per_second) != 0 else 0
 
     shifted_mask_1 = shift_mask(motion_mask, -shift_x, -shift_y)
     shifted_mask_2 = shift_mask(motion_mask, shift_x, shift_y)
@@ -153,7 +147,7 @@ def calculate_and_filter_matches(keypoints_1, keypoints_2, descriptors_1, descri
         x1, y1 = keypoints_1[match.queryIdx].pt
         x2, y2 = keypoints_2[match.trainIdx].pt
         if x2 - x1 < 2 and y2 - y1 < 2:
-            #print("Something went wrong, pixel keypoint difference is 0")
+            # print("Something went wrong, pixel keypoint difference is 0")
             continue
         filtered_matches.append(match)
     return matches
@@ -235,7 +229,7 @@ def calculate_speed_in_kmps(distance_angle, time_difference, iss_altitude, latit
 def calculate(image_1, image_2, time_difference, iss_altitude, latitude):
     img1_cv = cv2.imread(image_1, 0)
     img2_cv = cv2.imread(image_2, 0)
-    keypoints_1, keypoints_2, descriptors_1, descriptors_2 = calculate_features(img1_cv, img2_cv, 1000)
+    keypoints_1, keypoints_2, descriptors_1, descriptors_2 = calculate_features(img1_cv, img2_cv, 1000, time_difference)
 
     matches = calculate_and_filter_matches(keypoints_1, keypoints_2, descriptors_1, descriptors_2)
 
@@ -247,7 +241,9 @@ def calculate(image_1, image_2, time_difference, iss_altitude, latitude):
     inliers_count = np.sum(mask)
     matches_mask = mask.flatten().tolist()
     ransac_matches = [m for i, m in enumerate(matches) if matches_mask[i] == 1]
-
+    shift_x, shift_y = find_pixel_shift(keypoints_1, keypoints_2, ransac_matches)
+    x_pixel_shift_per_second.append(shift_x / time_difference)
+    y_pixel_shift_per_second.append(shift_y / time_difference)
     coordinates_1, coordinates_2 = find_matching_coordinates(keypoints_1, keypoints_2, ransac_matches)
 
     shape = img1_cv.shape
