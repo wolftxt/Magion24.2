@@ -120,12 +120,12 @@ def calculate_features(image_1, image_2, feature_number):
 
     shift_x, shift_y = 0, 0
     if des_c1 is not None and des_c2 is not None:
-        coarse_matches = calculate_matches(des_c1, des_c2)
+        coarse_matches = calculate_and_filter_matches(kp_c1, kp_c2, des_c1, des_c2)
 
         src_pts = np.float32([kp_c1[m.queryIdx].pt for m in coarse_matches]).reshape(-1, 1, 2)
         dst_pts = np.float32([kp_c2[m.trainIdx].pt for m in coarse_matches]).reshape(-1, 1, 2)
 
-        M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
+        M, mask = cv2.estimateAffinePartial2D(src_pts, dst_pts, method=cv2.RANSAC, ransacReprojThreshold=5.0)
 
         matches_mask = mask.flatten().tolist()
         coarse_matches = [m for i, m in enumerate(coarse_matches) if matches_mask[i] == 1]
@@ -145,10 +145,17 @@ def calculate_features(image_1, image_2, feature_number):
 
     return keypoints_1, keypoints_2, descriptors_1, descriptors_2
 
-
-def calculate_matches(descriptors_1, descriptors_2):
+def calculate_and_filter_matches(keypoints_1, keypoints_2, descriptors_1, descriptors_2):
     bf_coarse = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
     matches = bf_coarse.match(descriptors_1, descriptors_2)
+    filtered_matches = []
+    for match in matches:
+        x1, y1 = keypoints_1[match.queryIdx].pt
+        x2, y2 = keypoints_2[match.trainIdx].pt
+        if x2 - x1 < 2 and y2 - y1 < 2:
+            #print("Something went wrong, pixel keypoint difference is 0")
+            continue
+        filtered_matches.append(match)
     return matches
 
 
@@ -230,7 +237,7 @@ def calculate(image_1, image_2, time_difference, iss_altitude, latitude):
     img2_cv = cv2.imread(image_2, 0)
     keypoints_1, keypoints_2, descriptors_1, descriptors_2 = calculate_features(img1_cv, img2_cv, 1000)
 
-    matches = calculate_matches(descriptors_1, descriptors_2)
+    matches = calculate_and_filter_matches(keypoints_1, keypoints_2, descriptors_1, descriptors_2)
 
     src_pts = np.float32([keypoints_1[m.queryIdx].pt for m in matches]).reshape(-1, 1, 2)
     dst_pts = np.float32([keypoints_2[m.trainIdx].pt for m in matches]).reshape(-1, 1, 2)
@@ -241,7 +248,6 @@ def calculate(image_1, image_2, time_difference, iss_altitude, latitude):
     matches_mask = mask.flatten().tolist()
     ransac_matches = [m for i, m in enumerate(matches) if matches_mask[i] == 1]
 
-    # Calculate speed using only RANSAC inliers
     coordinates_1, coordinates_2 = find_matching_coordinates(keypoints_1, keypoints_2, ransac_matches)
 
     shape = img1_cv.shape
