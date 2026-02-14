@@ -1,3 +1,5 @@
+import math
+
 import cv2
 from picamzero import Camera
 from astro_pi_orbit import ISS
@@ -24,7 +26,7 @@ def capture_images():
         try:
             iss_altitude = ISS().coordinates().elevation.m
             iss_latitude = ISS().coordinates().latitude.degrees
-            speed, inliers = calculateSpeed.calculate(img1, img2, time_diff, iss_altitude, iss_latitude)
+            speed, inliers = calculateSpeed.calculate(img1, img2, time_diff, iss_altitude, math.radians(iss_latitude))
 
             results.append({
                 "speed": speed,

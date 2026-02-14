@@ -126,7 +126,7 @@ def main():
             #try:
             iss_latitude, iss_altitude = get_historical_iss_position(get_time(image_1))
             if iss_latitude is not None:
-                speed, inliers = calculateSpeed.calculate(image_1, image_2, time_difference, iss_altitude, iss_latitude)
+                speed, inliers = calculateSpeed.calculate(image_1, image_2, time_difference, iss_altitude, math.radians(iss_latitude))
             else:
                 raise ValueError("Could not retrieve ISS data from API")
 
