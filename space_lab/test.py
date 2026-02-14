@@ -121,7 +121,7 @@ def main():
 
         def process_image_pair(image_1, image_2):
             time_difference = get_time_difference(image_1, image_2)
-            if time_difference < 10 or time_difference > 30:
+            if time_difference < 12 or time_difference > 30:
                 return
             #try:
             iss_latitude, iss_altitude = get_historical_iss_position(get_time(image_1))
