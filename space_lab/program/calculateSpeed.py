@@ -103,16 +103,18 @@ def grid_calculate_features(image, mask, feature_number=2000, grid_size=(2, 2)):
 
             cell = image[y1:y2, x1:x2]
             mask_cell = mask[y1:y2, x1:x2]
-            kp, des = orb.detectAndCompute(cell, mask_cell)
+            try:
+                kp, des = orb.detectAndCompute(cell, mask_cell)
 
-            if kp:
-                # Offset keypoint coordinates back to global image space
-                for k in kp:
-                    k.pt = (k.pt[0] + x1, k.pt[1] + y1)
-                all_kp.extend(kp)
-                all_des.append(des)
+                if kp:
+                    # Offset keypoint coordinates back to global image space
+                    for k in kp:
+                        k.pt = (k.pt[0] + x1, k.pt[1] + y1)
+                    all_kp.extend(kp)
+                    all_des.append(des)
+            except:
+                print("Mask covers entire grid tile")
 
-                # Re-stack descriptors into a single numpy array
     import numpy as np
     descriptors = np.vstack(all_des) if all_des else None
     return all_kp, descriptors

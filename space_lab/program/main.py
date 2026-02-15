@@ -1,7 +1,10 @@
+import time
+start_time = time.perf_counter()
+
+import numpy as np
 import math
 from picamzero import Camera
 from astro_pi_orbit import ISS
-import time
 
 import camera_distortion
 from writeResult import write_result
@@ -10,8 +13,6 @@ import calculateSpeed
 TIME_INTERVAL = 13
 IMAGE_COUNT = 42
 MAX_TIME_ELAPSED = 570  # 9.5 minutes
-
-start_time = time.perf_counter()
 
 def capture_images():
     cam = Camera()
@@ -44,20 +45,21 @@ def capture_images():
         cycle_start = time.perf_counter()
 
         image_path = f"image{i}.jpg"
+        capture_start = time.perf_counter()
         cam.take_photo(image_path)
-        capture_end = time.perf_counter()
 
         images.append(camera_distortion.undistort_image(image_path))
-        timestamps.append(capture_end)
+        timestamps.append(capture_start)
 
         calculateSpeed.add_to_mask(images[i], True)
 
         elapsed_in_cycle = time.perf_counter() - cycle_start
-        sleep_time = max(0, TIME_INTERVAL - elapsed_in_cycle)
+        sleep_time = max(0.0, TIME_INTERVAL - elapsed_in_cycle)
 
         if elapsed_in_cycle > TIME_INTERVAL:
             print(f"WARNING: Cycle {i} exceeded TIME_INTERVAL! Timing may be drifting.")
 
+        np.savetxt("timestamps.csv", timestamps, delimiter=",", header="timestamps", comments='')
         time.sleep(sleep_time)
 
     for i in range(half_of_image_count, IMAGE_COUNT, 1):
@@ -73,11 +75,11 @@ def capture_images():
             process_image_pair(img1, img2, i - half_of_image_count + 1)
 
         image_path = f"image{i}.jpg"
+        capture_start = time.perf_counter()
         cam.take_photo(image_path)
-        capture_end = time.perf_counter()
 
         images.append(camera_distortion.undistort_image(image_path))
-        timestamps.append(capture_end)
+        timestamps.append(capture_start)
 
         if time.perf_counter() - start_time > MAX_TIME_ELAPSED:
             print("Time limit reached. Breaking loop.")
@@ -93,6 +95,7 @@ def capture_images():
         if elapsed_in_cycle > TIME_INTERVAL:
             print(f"WARNING: Cycle {i} exceeded TIME_INTERVAL! Timing may be drifting.")
 
+        np.savetxt("timestamps.csv", timestamps, delimiter=",", header="timestamps", comments='')
         time.sleep(sleep_time)
 
     if not results:
@@ -104,7 +107,7 @@ def capture_images():
     best_results = results[:top_n]
 
     final_speeds = [res["speed"] for res in best_results]
-    avg_speed = sum(final_speeds) / len(final_speeds)
+    avg_speed = np.median(final_speeds)
 
     print(f"Final Average Speed: {avg_speed:.4f}")
 
