@@ -1,5 +1,4 @@
 from datetime import datetime, timezone
-import cv2
 from exif import Image
 import os
 import sys
@@ -16,6 +15,7 @@ program_path = BASE_DIR / "program"
 sys.path.append(str(program_path))
 
 try:
+    import camera_distortion
     import calculateSpeed
 except ImportError:
     sys.exit(1)
@@ -110,7 +110,7 @@ def main():
 
         half_of_image_count = min(21, len(image_files))
         for i in range(half_of_image_count):
-            image = cv2.imread(image_files[i], 0)
+            image = camera_distortion.undistort_image(image_files[i])
             if i == 0:
                 shape = image.shape
                 calculateSpeed.initiate_stability_mask(half_of_image_count, shape[0], shape[1])
@@ -174,7 +174,7 @@ def main():
 
         best_results = []
         for res in results:
-            if res["confidence"] >= 100:
+            if res["confidence"] >= 150:
                 print(f"{res['name']:<30} | {res['speed']:.5g} km/s   | {res['confidence']}")
                 best_results.append(res["speed"])
         if len(best_results) == 0:

@@ -2,6 +2,8 @@ import math
 import numpy as np
 import cv2
 
+import camera_distortion
+
 frame_stack = None
 edge_stack = None
 size = 21
@@ -166,15 +168,15 @@ def find_matching_coordinates(keypoints_1, keypoints_2, matches):
     return coordinates_1, coordinates_2
 
 
-def calculate_mean_distance(coordinates_1, coordinates_2, shape, h, latitude, GSD):
+def calculate_mean_distance(coordinates_1, coordinates_2, h, latitude, GSD):
     if not coordinates_1:
         return 0
 
     count = len(coordinates_1)
     distance_angles = np.empty(count, dtype=np.float64)
 
+    nadir = camera_distortion.get_nadir()
     r = get_earth_radius(latitude)
-    nadir = [shape[1] / 2, shape[0] / 2]
     for i in range(count):
         dx = nadir[0] - coordinates_1[i][0]
         dy = nadir[1] - coordinates_1[i][1]
@@ -226,9 +228,12 @@ def calculate_speed_in_kmps(distance_angle, time_difference, iss_altitude, latit
 
 
 def calculate(image_1, image_2, time_difference, iss_altitude, latitude):
-    img1_cv = cv2.imread(image_1, 0)
-    img2_cv = cv2.imread(image_2, 0)
-    keypoints_1, keypoints_2, descriptors_1, descriptors_2 = calculate_features(img1_cv, img2_cv, 1000, time_difference)
+    image_1 = camera_distortion.undistort_image(image_1)
+    image_2 = camera_distortion.undistort_image(image_2)
+    w, h = camera_distortion.get_dimensions()
+    if image_1.shape[0] != h or image_1.shape[1] != w:
+        return -1, 0
+    keypoints_1, keypoints_2, descriptors_1, descriptors_2 = calculate_features(image_1, image_2, 1000, time_difference)
 
     matches = calculate_and_filter_matches(keypoints_1, keypoints_2, descriptors_1, descriptors_2)
 
@@ -240,27 +245,24 @@ def calculate(image_1, image_2, time_difference, iss_altitude, latitude):
     inliers_count = np.sum(mask)
     matches_mask = mask.flatten().tolist()
     ransac_matches = [m for i, m in enumerate(matches) if matches_mask[i] == 1]
+
     shift_x, shift_y = find_pixel_shift(keypoints_1, keypoints_2, ransac_matches)
     x_pixel_shift_per_second.append(shift_x / time_difference)
     y_pixel_shift_per_second.append(shift_y / time_difference)
+
     coordinates_1, coordinates_2 = find_matching_coordinates(keypoints_1, keypoints_2, ransac_matches)
 
-    shape = img1_cv.shape
-
-    image_width_px = shape[1]
-    focal_length_mm = 5.0
-    sensor_width_mm = 6.287
-    GSD = (iss_altitude * sensor_width_mm) / (focal_length_mm * image_width_px)
-    average_arc_angle = calculate_mean_distance(coordinates_1, coordinates_2, shape, iss_altitude, latitude, GSD)
+    GSD = iss_altitude / camera_distortion.get_effective_f_px()
+    average_arc_angle = calculate_mean_distance(coordinates_1, coordinates_2, iss_altitude, latitude, GSD)
     speed = calculate_speed_in_kmps(average_arc_angle, time_difference, iss_altitude, latitude)
 
-    print(f"speed: {speed:.5g} km/s, inliers: {inliers_count}, image name: {image_2}")
+    print(f"speed: {speed:.5g} km/s, inliers: {inliers_count}")
 
-    """h1, w1 = img1_cv.shape
-    h2, w2 = img2_cv.shape
+    """h1, w1 = image_1.shape
+    h2, w2 = image_2.shape
     output_visual = np.zeros((max(h1, h2), w1 + w2), dtype=np.uint8)
-    output_visual[:h1, :w1] = img1_cv
-    output_visual[:h2, w1:w1 + w2] = img2_cv
+    output_visual[:h1, :w1] = image_1
+    output_visual[:h2, w1:w1 + w2] = image_2
     output_visual = cv2.cvtColor(output_visual, cv2.COLOR_GRAY2BGR)
 
     for m in ransac_matches:
@@ -269,7 +271,6 @@ def calculate(image_1, image_2, time_difference, iss_altitude, latitude):
         cv2.line(output_visual, pt1, pt2, (0, 255, 0), 3)
         cv2.circle(output_visual, pt1, 5, (0, 0, 255), -1)
         cv2.circle(output_visual, pt2, 5, (0, 0, 255), -1)
-
     cv2.imshow("Feature Matches", output_visual)
     cv2.waitKey(0)
     cv2.destroyAllWindows()"""
