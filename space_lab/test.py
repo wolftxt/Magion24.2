@@ -123,17 +123,13 @@ def main():
             time_difference = get_time_difference(image_1, image_2)
             if time_difference < 12 or time_difference > 30:
                 return
-            #try:
             iss_latitude, iss_altitude = get_historical_iss_position(get_time(image_1))
             if iss_latitude is not None:
-                speed, inliers = calculateSpeed.calculate(image_1, image_2, time_difference, iss_altitude, math.radians(iss_latitude))
+                img_1 = camera_distortion.undistort_image(image_1)
+                img_2 = camera_distortion.undistort_image(image_2)
+                speed, inliers = calculateSpeed.calculate(img_1, img_2, time_difference, iss_altitude, math.radians(iss_latitude))
             else:
                 raise ValueError("Could not retrieve ISS data from API")
-
-            """except Exception as e:
-                print(f"Error processing {os.path.basename(image_1)}: {e}")
-                speed = -1
-                inliers = 0"""
 
             if speed != -1:
                 expected_err = speed * (math.sqrt(1 / 6) / time_difference)

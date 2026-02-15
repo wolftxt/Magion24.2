@@ -1,10 +1,9 @@
 import math
-
-import cv2
 from picamzero import Camera
 from astro_pi_orbit import ISS
 import time
 
+import camera_distortion
 from writeResult import write_result
 import calculateSpeed
 
@@ -22,7 +21,6 @@ def capture_images():
 
     def process_image_pair(img1, img2, i):
         time_diff = timestamps[i] - timestamps[i - 1]
-
         try:
             iss_altitude = ISS().coordinates().elevation.m
             iss_latitude = ISS().coordinates().latitude.degrees
@@ -36,7 +34,8 @@ def capture_images():
             print(f"Calculation error at index {i}: {e}")
 
     half_of_image_count = IMAGE_COUNT // 2
-    calculateSpeed.initiate_stability_mask(half_of_image_count, 3040, 4056)
+    shape = camera_distortion.get_dimensions()
+    calculateSpeed.initiate_stability_mask(half_of_image_count, shape[1], shape[0])
 
     for i in range(half_of_image_count):
         if time.perf_counter() - start_time > MAX_TIME_ELAPSED:
@@ -48,10 +47,10 @@ def capture_images():
         cam.take_photo(image_path)
         capture_end = time.perf_counter()
 
-        images.append(image_path)
+        images.append(camera_distortion.undistort_image(image_path))
         timestamps.append(capture_end)
 
-        calculateSpeed.add_to_mask(cv2.imread(images[i], 0), True)
+        calculateSpeed.add_to_mask(images[i], True)
 
         elapsed_in_cycle = time.perf_counter() - cycle_start
         sleep_time = max(0, TIME_INTERVAL - elapsed_in_cycle)
@@ -77,15 +76,19 @@ def capture_images():
         cam.take_photo(image_path)
         capture_end = time.perf_counter()
 
-        images.append(image_path)
+        images.append(camera_distortion.undistort_image(image_path))
         timestamps.append(capture_end)
+
+        if time.perf_counter() - start_time > MAX_TIME_ELAPSED:
+            print("Time limit reached. Breaking loop.")
+            break
 
         img1 = images[i - 1]
         img2 = images[i]
         process_image_pair(img1, img2, i)
 
         elapsed_in_cycle = time.perf_counter() - cycle_start
-        sleep_time = max(0, TIME_INTERVAL - elapsed_in_cycle)
+        sleep_time = max(0.0, TIME_INTERVAL - elapsed_in_cycle)
 
         if elapsed_in_cycle > TIME_INTERVAL:
             print(f"WARNING: Cycle {i} exceeded TIME_INTERVAL! Timing may be drifting.")
@@ -108,7 +111,6 @@ def capture_images():
     del cam
     return avg_speed
 
-
 def main():
     try:
         speed = capture_images()
@@ -116,7 +118,6 @@ def main():
     except Exception as e:
         print(f"Fatal error: {e}")
         write_result(0)
-
 
 if __name__ == "__main__":
     main()

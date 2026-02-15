@@ -228,8 +228,6 @@ def calculate_speed_in_kmps(distance_angle, time_difference, iss_altitude, latit
 
 
 def calculate(image_1, image_2, time_difference, iss_altitude, latitude):
-    image_1 = camera_distortion.undistort_image(image_1)
-    image_2 = camera_distortion.undistort_image(image_2)
     w, h = camera_distortion.get_dimensions()
     if image_1.shape[0] != h or image_1.shape[1] != w:
         return -1, 0
